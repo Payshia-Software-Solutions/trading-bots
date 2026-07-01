@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Binance Side Panel Analyzer V2</title>
+  <link rel="stylesheet" href="sidepanel.css">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="analyzer-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-area">
+        <span class="logo-dot"></span>
+        <h1>Binance <span data-i18n="appSub">Analyzer V2</span></h1>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button id="lang-toggle" class="theme-toggle-btn" title="Switch Language / භාෂාව මාරු කරන්න">🇱🇰</button>
+        <button id="theme-toggle" class="theme-toggle-btn" title="Toggle Light/Dark Mode">☀️</button>
+        <div id="connection-status" class="status-badge disconnected" data-i18n="disconnected">Disconnected</div>
+      </div>
+    </header>
+
+    <!-- Disconnected Overlay Warning -->
+    <div id="connection-warning" class="warning-panel">
+      <div class="warning-icon">📈</div>
+      <h3 data-i18n="warningTitle">No Active Binance Tab</h3>
+      <p data-i18n="warningDesc">Please open a Binance Spot Trading page in your browser to begin analysis.</p>
+      <p class="example-url">e.g., binance.com/en/trade/BTC_USDT</p>
+    </div>
+
+    <!-- Active Analyzer Panel -->
+    <div id="analyzer-panel" class="main-panel hidden">
+
+      <!-- Mode Selector -->
+      <div class="mode-selector">
+        <button id="btn-mode-scalp" class="btn-mode active" data-i18n="modeScalp">⚡ SCALP (15m)</button>
+        <button id="btn-mode-swing" class="btn-mode" data-i18n="modeSwing">📈 SWING (4h)</button>
+      </div>
+
+      <!-- Pair & Live Price Card -->
+      <div class="card price-card">
+        <div class="card-header">
+          <span id="trading-pair" class="pair-name">---/---</span>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span id="last-update" class="update-tag" data-i18n="fetching">Fetching...</span>
+            <span class="live-tag">LIVE</span>
+          </div>
+        </div>
+        <div class="price-display">
+          <span class="currency-symbol">$</span>
+          <span id="current-price" class="price-value">0.00</span>
+          <span id="price-arrow" class="price-arrow">→</span>
+          <span id="price-change" class="price-change-pct"></span>
+        </div>
+        <div class="price-stats">
+          <div class="stat-col">
+            <span class="stat-lbl" data-i18n="high24">24h High</span>
+            <span id="session-high" class="stat-val" style="color:#a4ffd4;">$0.00</span>
+          </div>
+          <div class="stat-col">
+            <span class="stat-lbl" data-i18n="low24">24h Low</span>
+            <span id="session-low" class="stat-val" style="color:#ffa4a4;">$0.00</span>
+          </div>
+          <div class="stat-col">
+            <span class="stat-lbl" data-i18n="volume">Volume</span>
+            <span id="volume-24h" class="stat-val">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Signal Score Card -->
+      <div class="card score-card">
+        <div class="score-header">
+          <span class="section-title" data-i18n="scoreTitle">Signal Confluence Score</span>
+          <div class="score-badge-wrap">
+            <span id="score-value" class="score-value">0</span>
+            <span class="score-max">/8</span>
+          </div>
+        </div>
+        <div id="score-bar-wrap" class="score-bar-wrap">
+          <div id="score-bar-fill" class="score-bar-fill" style="width:0%"></div>
+        </div>
+        <div class="score-label-row">
+          <span style="color:var(--neon-red);font-size:9px;" data-i18n="weak">WEAK</span>
+          <span style="color:var(--neon-yellow);font-size:9px;" data-i18n="moderate">MODERATE</span>
+          <span style="color:var(--neon-green);font-size:9px;" data-i18n="strong">STRONG</span>
+        </div>
+      </div>
+
+      <!-- AI Entry & Exit Targets Card -->
+      <div class="card signals-card">
+        <h3 data-i18n="targetsTitle">AI ENTRY &amp; EXIT TARGETS</h3>
+        <div class="target-grid">
+          <div class="target-box buy-box">
+            <span class="target-title" data-i18n="buyTitle">BUY LIMIT ORDER</span>
+            <div id="buy-target-price" class="target-price">Calculating...</div>
+            <div id="buy-target-status" class="target-status neutral" data-i18n="waiting">Waiting...</div>
+          </div>
+          <div class="target-box sell-box">
+            <span class="target-title" data-i18n="sellTitle">SELL TARGET</span>
+            <div id="sell-target-price" class="target-price">Calculating...</div>
+            <div id="sell-target-status" class="target-status neutral" data-i18n="waiting">Waiting...</div>
+          </div>
+        </div>
+        <!-- Stop Loss row -->
+        <div class="sl-row">
+          <span class="sl-label" data-i18n="stopLoss">🛑 Stop Loss</span>
+          <span id="stop-loss-price" class="sl-value">—</span>
+          <span class="sl-label" style="margin-left:12px;" data-i18n="rrRatio">📊 R/R Ratio</span>
+          <span id="rr-ratio" class="sl-value">—</span>
+        </div>
+        <!-- Support & Resistance -->
+        <div class="levels-display">
+          <div class="level-row">
+            <span class="level-lbl" data-i18n="resistance">Resistance (Ceiling)</span>
+            <span id="resistance-val" class="level-val">$0.00</span>
+          </div>
+          <div class="level-gauge-container">
+            <div id="level-position-fill" class="level-gauge-fill" style="left:50%;"></div>
+          </div>
+          <div class="level-row">
+            <span class="level-lbl" data-i18n="support">Support (Floor)</span>
+            <span id="support-val" class="level-val">$0.00</span>
+          </div>
+        </div>
+
+        <!-- Trade Health Monitor — visible only when IN TRADE -->
+        <div id="trade-health-panel" class="trade-health-panel hidden">
+          <div class="th-header">
+            <span class="th-title" data-i18n="tradeHealthTitle">📡 Trade Health Monitor</span>
+            <span id="th-health-badge" class="th-badge th-safe">HEALTHY</span>
+          </div>
+          <div class="th-row">
+            <span class="th-lbl" data-i18n="thCurrentScore">Current Score</span>
+            <div id="th-score-dots" class="th-score-dots"></div>
+            <span id="th-score-val" class="th-val">—/8</span>
+          </div>
+          <div class="th-row">
+            <span class="th-lbl" data-i18n="thBtcStatus">BTC Status</span>
+            <span id="th-btc-val" class="th-val">—</span>
+          </div>
+          <div class="th-row">
+            <span class="th-lbl" data-i18n="thProgress">Progress to Target</span>
+            <span id="th-progress-val" class="th-val">—</span>
+          </div>
+          <div class="th-row th-input-row">
+            <span class="th-lbl" data-i18n="thInvested">Invested (USDT)</span>
+            <input type="number" id="th-invested-input" class="th-input" placeholder="0.00" min="0" step="1" />
+          </div>
+          <div class="th-row">
+            <span class="th-lbl" data-i18n="thCurrentPnl">Current PnL</span>
+            <span id="th-pnl-val" class="th-val th-pnl">—</span>
+          </div>
+          <div class="th-progress-bar-wrap">
+            <div id="th-progress-fill" class="th-progress-fill" style="width:0%;"></div>
+          </div>
+          <div id="th-warning-msg" class="th-warning hidden"></div>
+        </div>
+      </div>
+
+      <!-- BTC Correlation -->
+      <div class="card btc-card">
+        <div class="btc-row">
+          <span class="btc-label" data-i18n="btcMarket">₿ BTC Market</span>
+          <span id="btc-price" class="btc-price">—</span>
+          <span id="btc-momentum" class="btc-momentum">—</span>
+          <span id="btc-status" class="btc-status-badge neutral" data-i18n="neutral">NEUTRAL</span>
+        </div>
+      </div>
+
+      <!-- Overall Recommendation -->
+      <div class="card sentiment-card">
+        <span class="section-title" data-i18n="aiRecommend">Overall AI Recommendation</span>
+        <div id="sentiment-indicator" class="sentiment-value neutral" data-i18n="neutral">NEUTRAL</div>
+        <div id="sentiment-reason" class="sentiment-subtext" data-i18n="fetching">Fetching market data from Binance API...</div>
+      </div>
+
+      <!-- Signal Accuracy Tracker Card -->
+      <div class="card accuracy-card">
+        <div class="accuracy-header">
+          <h3 data-i18n="accuracyTitle">📈 Signal Accuracy</h3>
+          <button id="clear-history-btn" class="clear-hist-btn" title="Clear History" data-i18n="clearHistory">🗑</button>
+        </div>
+        <div class="acc-stats-row">
+          <div class="acc-stat-box">
+            <span class="acc-stat-val" id="acc-wins" style="color:var(--neon-green);">0</span>
+            <span class="acc-stat-lbl" data-i18n="accWins">Wins</span>
+          </div>
+          <div class="acc-stat-box">
+            <span class="acc-stat-val" id="acc-losses" style="color:var(--neon-red);">0</span>
+            <span class="acc-stat-lbl" data-i18n="accLosses">Losses</span>
+          </div>
+          <div class="acc-stat-box">
+            <span class="acc-stat-val" id="acc-pending" style="color:var(--neon-yellow);">0</span>
+            <span class="acc-stat-lbl" data-i18n="accPending">Pending</span>
+          </div>
+          <div class="acc-winrate-box">
+            <span id="acc-winrate" class="acc-winrate-val">—%</span>
+            <span class="acc-stat-lbl" data-i18n="accWinRate">Win Rate</span>
+          </div>
+        </div>
+        <div class="acc-bar-wrap">
+          <div id="acc-bar-fill" class="acc-bar-fill" style="width:0%;"></div>
+        </div>
+        <div id="signal-history-list" class="signal-history-list">
+          <div class="no-signals-msg" data-i18n="noSignals">No signals recorded yet.</div>
+        </div>
+      </div>
+
+      <!-- Confluence Checklist -->
+      <div class="card checklist-card">
+        <h3 data-i18n="checklistTitle">Entry Setup Confirmation</h3>
+        <ul class="checklist-items">
+          <li id="chk-support" class="chk-item">❌ <span data-i18n="chkSupport">Price near Support Zone</span></li>
+          <li id="chk-rsi" class="chk-item">❌ <span data-i18n="chkRsi">RSI Oversold Recovery (&lt;42)</span></li>
+          <li id="chk-ema" class="chk-item">❌ <span data-i18n="chkEma">EMA Golden Cross (9 &gt; 21)</span></li>
+          <li id="chk-macd" class="chk-item">❌ <span data-i18n="chkMacd">MACD Bullish Crossover</span></li>
+          <li id="chk-volume" class="chk-item">❌ <span data-i18n="chkVolume">Volume Spike (&gt;1.5x avg)</span></li>
+          <li id="chk-candle" class="chk-item">❌ <span data-i18n="chkCandle">Bullish Candle Pattern</span></li>
+          <li id="chk-trend1h" class="chk-item">❌ <span data-i18n="chkTrend">1h Trend is UP</span></li>
+          <li id="chk-btc" class="chk-item">❌ <span data-i18n="chkBtc">BTC Market Safe</span></li>
+        </ul>
+      </div>
+
+      <!-- Full Analysis Reasoning -->
+      <div class="card reasoning-card">
+        <h3 data-i18n="reasoningTitle">📊 Analysis Reasoning</h3>
+        <div id="reasoning-log" class="reasoning-log" data-i18n="fetching">
+          Fetching candle data from Binance API...
+        </div>
+      </div>
+
+      <!-- Technical Indicators -->
+      <div class="card indicators-card">
+        <h3 data-i18n="indicatorsTitle">Technical Indicators</h3>
+
+        <!-- RSI -->
+        <div class="indicator-row">
+          <div class="ind-info">
+            <span class="ind-name">RSI (14)</span>
+            <span id="rsi-status" class="ind-status neutral" data-i18n="statusNeutral">Neutral</span>
+          </div>
+          <div class="ind-bar-container">
+            <div id="rsi-fill" class="ind-bar-fill" style="width:50%;"></div>
+            <div class="rsi-markers"><span>30</span><span>70</span></div>
+          </div>
+          <span id="rsi-val" class="ind-value">—</span>
+        </div>
+
+        <!-- EMA -->
+        <div class="indicator-row">
+          <div class="ind-info">
+            <span class="ind-name" data-i18n="emaCross">EMA Crossover (15m)</span>
+            <span id="ema-status" class="ind-status neutral" data-i18n="statusNeutral">Neutral</span>
+          </div>
+          <div class="crossover-status">
+            <div class="ema-chip short">EMA9: <span id="ema-short-val">—</span></div>
+            <div class="ema-chip long">EMA21: <span id="ema-long-val">—</span></div>
+            <div class="ema-chip long">EMA50(1h): <span id="ema50-val">—</span></div>
+          </div>
+        </div>
+
+        <!-- MACD -->
+        <div class="indicator-row">
+          <div class="ind-info">
+            <span class="ind-name">MACD (12,26,9)</span>
+            <span id="macd-status" class="ind-status neutral" data-i18n="statusNeutral">Neutral</span>
+          </div>
+          <div class="crossover-status">
+            <div class="ema-chip short">MACD: <span id="macd-val">—</span></div>
+            <div class="ema-chip long">Signal: <span id="macd-signal-val">—</span></div>
+          </div>
+        </div>
+
+        <!-- Volume -->
+        <div class="indicator-row">
+          <div class="ind-info">
+            <span class="ind-name" data-i18n="volVsAvg">Volume vs Avg</span>
+            <span id="volume-status" class="ind-status neutral" data-i18n="statusNeutral">Neutral</span>
+          </div>
+          <div class="crossover-status">
+            <div class="ema-chip short"><span data-i18n="current">Current</span>: <span id="vol-current">—</span></div>
+            <div class="ema-chip long">Avg(20): <span id="vol-avg">—</span></div>
+          </div>
+        </div>
+
+        <!-- Candle Pattern -->
+        <div class="indicator-row">
+          <div class="ind-info">
+            <span class="ind-name" data-i18n="candlePattern">Candle Pattern</span>
+            <span id="pattern-status" class="ind-status neutral" data-i18n="scanning">Scanning...</span>
+          </div>
+          <div class="crossover-status">
+            <div class="ema-chip short" style="flex:2;"><span data-i18n="pattern">Pattern</span>: <span id="pattern-name" style="color:var(--text-main);" data-i18n="none">None</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="footer-actions">
+        <button id="reset-session" class="btn secondary-btn" data-i18n="btnReset">🔄 Reset</button>
+        <button id="re-sync" class="btn primary-btn" data-i18n="btnSync">⟳ Re-Sync Tab</button>
+        <button id="force-refresh" class="btn primary-btn" style="background:var(--neon-green);color:#000;" data-i18n="btnRefresh">📡 Refresh API</button>
+      </div>
+    </div>
+  </div>
+  <script src="sidepanel.js"></script>
+</body>
+</html>

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Aviator Scraper popup</title>
+  <style>
+    :root {
+      --bg-dark: #0c0f17;
+      --card-bg: rgba(20, 26, 40, 0.65);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --text-primary: #f3f4f6;
+      --text-secondary: #9ca3af;
+      --accent-purple: #a855f7;
+      --accent-green: #10b981;
+      --accent-red: #ef4444;
+    }
+
+    body {
+      width: 320px;
+      margin: 0;
+      padding: 16px;
+      background-color: var(--bg-dark);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      box-sizing: border-box;
+    }
+
+    h2 {
+      margin: 0 0 12px 0;
+      font-size: 1.1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .badge-icon {
+      font-size: 1.25rem;
+    }
+
+    .status-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 14px;
+      backdrop-filter: blur(10px);
+    }
+
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      margin-bottom: 6px;
+    }
+
+    .status-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .status-val {
+      font-weight: 700;
+    }
+
+    .status-val.active {
+      color: var(--accent-green);
+    }
+
+    .status-val.inactive {
+      color: var(--accent-red);
+    }
+
+    .odds-title {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .odds-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      max-height: 120px;
+      overflow-y: auto;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .odd-badge {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      padding: 4px 2px;
+      font-size: 0.78rem;
+      text-align: center;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .odd-badge.high {
+      color: #c084fc;
+      background: rgba(168, 85, 247, 0.15);
+      border-color: rgba(168, 85, 247, 0.3);
+    }
+
+    .odd-badge.low {
+      color: #f87171;
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+
+    .btn {
+      width: 100%;
+      background: linear-gradient(135deg, var(--accent-purple), #7e22ce);
+      border: none;
+      color: #fff;
+      padding: 10px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+      margin-top: 14px;
+      transition: opacity 0.2s;
+    }
+
+    .btn:hover {
+      opacity: 0.9;
+    }
+
+    .footer {
+      font-size: 0.68rem;
+      color: var(--text-secondary);
+      text-align: center;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h2><span class="badge-icon">✈️</span> Aviator Link Scraper</h2>
+  
+  <div class="status-card">
+    <div class="status-row">
+      <span>Scraper Status:</span>
+      <span id="scraping-status" class="status-val inactive">Inactive</span>
+    </div>
+    <div class="status-row">
+      <span>Last Sync:</span>
+      <span id="last-sync-time" class="status-val">—</span>
+    </div>
+    <div class="status-row" style="margin-top: 8px; font-size: 0.75rem; color: var(--text-secondary);">
+      <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px;" id="source-url">Open a game page to scan</span>
+    </div>
+  </div>
+
+  <div class="odds-title">Extracted Multipliers (<span id="odds-count">0</span>)</div>
+  <div class="odds-grid" id="odds-container">
+    <div style="grid-column: span 5; text-align: center; font-size: 0.8rem; color: var(--text-secondary); padding: 12px 0;">
+      No data collected yet.
+    </div>
+  </div>
+
+  <button id="btn-open-dash" class="btn">💻 Open Analyzer Dashboard</button>
+
+  <div class="footer">
+    Works in real-time. Keep game tab open.
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Aviator Pattern Predictor Panel</title>
+  <style>
+    :root {
+      --bg-dark: #0a0d14;
+      --card-bg: rgba(18, 24, 38, 0.75);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --text-primary: #f3f4f6;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+      --accent-purple: #a855f7;
+      --accent-green: #10b981;
+      --accent-red: #ef4444;
+      --accent-blue: #3b82f6;
+      --accent-orange: #f59e0b;
+    }
+
+    body {
+      margin: 0;
+      padding: 14px;
+      background-color: var(--bg-dark);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      box-sizing: border-box;
+      font-size: 13px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #a855f7, #f43f5e);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .badge {
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 20px;
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--accent-green);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      font-weight: 700;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+      backdrop-filter: blur(10px);
+    }
+
+    .card-title {
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      margin-bottom: 10px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Hero Target Component */
+    .hero-target-box {
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(244, 63, 94, 0.08));
+      border: 1.5px solid rgba(168, 85, 247, 0.3);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      margin-bottom: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      position: relative;
+      overflow: hidden;
+    }
+    .hero-target-box::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 3px;
+      background: linear-gradient(90deg, var(--accent-purple), var(--accent-red));
+    }
+    .hero-lbl {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-secondary);
+      font-weight: 700;
+    }
+    .hero-val {
+      font-size: 3.2rem;
+      font-weight: 900;
+      color: #fff;
+      text-shadow: 0 0 15px rgba(168, 85, 247, 0.6);
+      margin: 6px 0;
+      font-family: monospace;
+    }
+    .hero-sub {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--accent-green);
+    }
+
+    /* Accuracy Meter */
+    .accuracy-card {
+      background: rgba(20, 26, 40, 0.8);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .accuracy-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .accuracy-bar-bg {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 6px;
+    }
+    .accuracy-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-red), var(--accent-orange), var(--accent-green));
+      width: 0%;
+      transition: width 0.5s ease;
+    }
+    .accuracy-stats {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+    }
+
+    /* Grid Layouts */
+    .stats-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .stat-box {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 8px;
+      text-align: center;
+    }
+    .stat-lbl {
+      font-size: 0.68rem;
+      color: var(--text-secondary);
+    }
+    .stat-val {
+      font-size: 1.1rem;
+      font-weight: 800;
+      margin-top: 3px;
+    }
+
+    .form-group {
+      margin-bottom: 10px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+    select, button {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 6px 8px;
+      color: #fff;
+      font-size: 0.8rem;
+      box-sizing: border-box;
+      outline: none;
+    }
+    select:focus {
+      border-color: var(--accent-purple);
+    }
+
+    .toggle-row {
+      display: flex;
+      gap: 4px;
+    }
+    .toggle-btn {
+      flex: 1;
+      padding: 5px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      background: rgba(255,255,255,0.03);
+      cursor: pointer;
+      text-align: center;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+    }
+    .toggle-btn.active {
+      background: rgba(168, 85, 247, 0.15);
+      border-color: var(--accent-purple);
+      color: #c084fc;
+    }
+
+    /* Forecast cards */
+    .forecast-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .forecast-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.015);
+      border: 1px solid var(--border-color);
+      border-left: 4px solid var(--accent-purple);
+    }
+    .fc-round {
+      font-weight: 700;
+      font-size: 0.75rem;
+    }
+    .fc-val {
+      font-size: 1rem;
+      font-weight: 800;
+    }
+    .fc-meta {
+      text-align: right;
+      font-size: 0.68rem;
+      color: var(--text-secondary);
+    }
+
+    /* History Grid */
+    .odds-pill-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      max-height: 100px;
+      overflow-y: auto;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+    .pill {
+      font-size: 0.72rem;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .pill.high {
+      background: rgba(168, 85, 247, 0.15);
+      color: #c084fc;
+      border-color: rgba(168, 85, 247, 0.3);
+    }
+    .pill.low {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+
+    .gap-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      margin-top: 3px;
+    }
+    .badge-status {
+      padding: 2px 5px;
+      font-size: 0.65rem;
+      font-weight: 800;
+      border-radius: 4px;
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, var(--accent-red), #991b1b);
+      border: none;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 0.75rem;
+      padding: 6px;
+      border-radius: 6px;
+      margin-top: 6px;
+    }
+
+    @keyframes alertPulse {
+      from { box-shadow: 0 0 8px rgba(239, 68, 68, 0.4); border-color: rgba(239, 68, 68, 0.5); }
+      to { box-shadow: 0 0 24px rgba(239, 68, 68, 0.85); border-color: #ef4444; }
+    }
+    
+    .thresh-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+      margin-top: 4px;
+      margin-bottom: 8px;
+    }
+    
+    .thresh-pill {
+      width: 100% !important;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 4px 0 !important;
+      color: var(--text-secondary);
+      font-size: 0.65rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+      box-sizing: border-box;
+      min-width: 0 !important;
+    }
+    .thresh-pill:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+    }
+    .thresh-pill.active {
+      background: rgba(168, 85, 247, 0.2);
+      border-color: var(--accent-purple);
+      color: #fff;
+      box-shadow: 0 0 8px rgba(168, 85, 247, 0.4);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>✈️ Aviator AI Predictor</h1>
+    <span class="badge" id="lbl-status">Searching...</span>
+  </header>
+
+  <!-- Navigation Tabs Navigation -->
+  <div class="tabs-nav" style="
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    padding: 4px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+  ">
+    <button class="tab-btn active" id="btn-tab-predictor" style="
+      flex: 1;
+      padding: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      background: rgba(168, 85, 247, 0.12);
+      border: 1px solid rgba(168, 85, 247, 0.25);
+      color: #c084fc;
+      border-radius: 6px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s ease;
+    ">🔮 AI Predictor</button>
+    <button class="tab-btn" id="btn-tab-planner" style="
+      flex: 1;
+      padding: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-secondary);
+      border-radius: 6px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s ease;
+    ">🎯 Target Planner</button>
+  </div>
+
+  <!-- Predictor Panel Content -->
+  <div id="panel-predictor" class="tab-panel">
+  <!-- Glowing Neon Alert for Imminent High Odds -->
+  <!-- Glowing Neon Alert for Imminent High Odds -->
+  <div id="high-odds-alert" style="
+    display: none;
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(239, 68, 68, 0.15));
+    border: 1.5px solid var(--accent-purple);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 12px;
+    color: #fff;
+    box-shadow: 0 0 15px rgba(168, 85, 247, 0.35);
+    animation: alertPulse 2s infinite alternate;
+  ">
+    <!-- Header/Title -->
+    <div id="high-odds-alert-title" style="
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      text-align: center;
+      color: #c084fc;
+      margin-bottom: 4px;
+    ">
+      🚨 HIGH ODDS IMMINENT
+    </div>
+    
+    <!-- Large Target Value -->
+    <div id="high-odds-alert-val" style="
+      font-size: 1.8rem;
+      font-weight: 900;
+      text-align: center;
+      color: #fff;
+      text-shadow: 0 0 15px rgba(168, 85, 247, 0.7);
+      margin: 4px 0;
+      font-family: monospace;
+    ">
+      —
+    </div>
+
+    <!-- Sub-grid of Boundaries -->
+    <div style="
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.08);
+      font-size: 0.65rem;
+      text-align: center;
+    ">
+      <div>
+        <div style="color: var(--text-secondary); font-size: 0.55rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px;">Min Boundary</div>
+        <div id="val-high-bound-min" style="font-weight: 800; color: #93c5fd; margin-top: 1px; font-family: monospace;">—</div>
+      </div>
+      <div>
+        <div style="color: var(--text-secondary); font-size: 0.55rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px;">Safe Exit</div>
+        <div id="val-high-bound-safe" style="font-weight: 800; color: #86efac; margin-top: 1px; font-family: monospace;">—</div>
+      </div>
+      <div>
+        <div style="color: var(--text-secondary); font-size: 0.55rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.3px;">Max Boundary</div>
+        <div id="val-high-bound-max" style="font-weight: 800; color: #fca5a5; margin-top: 1px; font-family: monospace;">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Glowing Market Risk Warning Banner -->
+  <div id="market-risk-alert" style="
+    display: none;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.28), rgba(220, 38, 38, 0.18));
+    border: 1.5px solid #ef4444;
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    text-align: center;
+    color: #fff;
+    font-weight: 800;
+    font-size: 0.82rem;
+    letter-spacing: 0.5px;
+    box-shadow: 0 0 15px rgba(239, 68, 68, 0.35);
+    animation: alertPulse 1.5s infinite alternate;
+  ">
+    ⚠️ HIGH MARKET RISK: High crash frequency. Stop betting and wait!
+  </div>
+
+  <!-- Glowing Target Reached Banner -->
+  <div id="target-reached-alert" style="
+    display: none;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.28), rgba(5, 150, 105, 0.18));
+    border: 1.5px solid var(--accent-green);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 12px;
+    text-align: center;
+    color: #fff;
+    font-weight: 800;
+    font-size: 0.82rem;
+    letter-spacing: 0.5px;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.35);
+    animation: alertPulse 2s infinite alternate;
+  ">
+    🎉 DAILY PROFIT TARGET REACHED! Secure your profits and take a break today! 🛑
+  </div>
+
+  <!-- Hero Next Prediction (ACCURATE & LARGE) -->
+  <div class="hero-target-box" id="hero-card">
+    <div class="hero-lbl">Next Round Prediction</div>
+    <div class="hero-val" id="hero-val">1.40x</div>
+    <div class="hero-sub" id="hero-sub">Standard Exit (Risk: Medium)</div>
+  </div>
+
+  <!-- Safety Level Comparison Panel -->
+  <div class="card" style="margin-top: -6px; padding: 10px; border-left: 3.5px solid var(--accent-blue);">
+    <div style="font-size: 0.72rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700; margin-bottom: 8px; letter-spacing: 0.5px;">
+      Compare Safety Level Targets
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center;">
+      <!-- Max Safety -->
+      <div id="compare-max" style="background: rgba(255, 255, 255, 0.02); border: 1.5px solid var(--border-color); border-radius: 6px; padding: 6px 4px; cursor: pointer; transition: all 0.2s ease;">
+        <div style="font-size: 0.55rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Max</div>
+        <div id="compare-val-max" style="font-size: 0.95rem; font-weight: 800; font-family: monospace; margin-top: 2px;">—</div>
+      </div>
+      <!-- High Safety -->
+      <div id="compare-high" style="background: rgba(255, 255, 255, 0.02); border: 1.5px solid var(--border-color); border-radius: 6px; padding: 6px 4px; cursor: pointer; transition: all 0.2s ease;">
+        <div style="font-size: 0.55rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">High</div>
+        <div id="compare-val-high" style="font-size: 0.95rem; font-weight: 800; font-family: monospace; margin-top: 2px;">—</div>
+      </div>
+      <!-- Standard -->
+      <div id="compare-standard" style="background: rgba(255, 255, 255, 0.02); border: 1.5px solid var(--border-color); border-radius: 6px; padding: 6px 4px; cursor: pointer; transition: all 0.2s ease;">
+        <div style="font-size: 0.55rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Std</div>
+        <div id="compare-val-standard" style="font-size: 0.95rem; font-weight: 800; font-family: monospace; margin-top: 2px;">—</div>
+      </div>
+      <!-- Aggressive -->
+      <div id="compare-aggressive" style="background: rgba(255, 255, 255, 0.02); border: 1.5px solid var(--border-color); border-radius: 6px; padding: 6px 4px; cursor: pointer; transition: all 0.2s ease;">
+        <div style="font-size: 0.55rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Aggr</div>
+        <div id="compare-val-aggressive" style="font-size: 0.95rem; font-weight: 800; font-family: monospace; margin-top: 2px;">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Real-time Verification Accuracy Tracker -->
+  <div class="accuracy-card">
+    <div class="accuracy-header">
+      <span>AI Forecast Accuracy Rate</span>
+      <span id="lbl-accuracy-pct" style="color: var(--accent-green);">0%</span>
+    </div>
+    <div class="accuracy-bar-bg">
+      <div class="accuracy-bar-fill" id="accuracy-bar"></div>
+    </div>
+    <div class="accuracy-stats">
+      <span id="lbl-accuracy-wins">Passed: 0</span>
+      <span id="lbl-accuracy-total">Total Verifications: 0</span>
+    </div>
+
+    <!-- Engine Accuracy Comparison Grid -->
+    <div style="
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px dashed var(--border-color);
+      font-size: 0.7rem;
+    ">
+      <div style="font-weight: 700; color: var(--text-secondary); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;">Engine Accuracy Comparison:</div>
+      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; text-align: center;">
+        <div style="background: rgba(255,255,255,0.02); padding: 4px 1px; border-radius: 4px; border: 1px solid var(--border-color);">
+          <div style="font-size: 0.52rem; color: var(--text-muted); text-transform: uppercase;">Markov</div>
+          <div id="lbl-acc-markov" style="font-weight: 700; color: var(--text-secondary); font-size: 0.65rem;">—</div>
+          <div id="lbl-pred-markov" style="font-size: 0.58rem; font-weight: 600; color: var(--accent-blue); margin-top: 2px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 2px;">—</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.02); padding: 4px 1px; border-radius: 4px; border: 1px solid var(--border-color);">
+          <div style="font-size: 0.52rem; color: var(--text-muted); text-transform: uppercase;">KNN</div>
+          <div id="lbl-acc-knn" style="font-weight: 700; color: var(--text-secondary); font-size: 0.65rem;">—</div>
+          <div id="lbl-pred-knn" style="font-size: 0.58rem; font-weight: 600; color: var(--accent-blue); margin-top: 2px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 2px;">—</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.02); padding: 4px 1px; border-radius: 4px; border: 1px solid var(--border-color);">
+          <div style="font-size: 0.52rem; color: var(--text-muted); text-transform: uppercase;">Trend</div>
+          <div id="lbl-acc-trend" style="font-weight: 700; color: var(--text-secondary); font-size: 0.65rem;">—</div>
+          <div id="lbl-pred-trend" style="font-size: 0.58rem; font-weight: 600; color: var(--accent-blue); margin-top: 2px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 2px;">—</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.02); padding: 4px 1px; border-radius: 4px; border: 1px solid var(--border-color);">
+          <div style="font-size: 0.52rem; color: var(--text-muted); text-transform: uppercase;">Pareto</div>
+          <div id="lbl-acc-pareto" style="font-weight: 700; color: var(--text-secondary); font-size: 0.65rem;">—</div>
+          <div id="lbl-pred-pareto" style="font-size: 0.58rem; font-weight: 600; color: var(--accent-blue); margin-top: 2px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 2px;">—</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.02); padding: 4px 1px; border-radius: 4px; border: 1px solid var(--border-color);">
+          <div style="font-size: 0.52rem; color: var(--text-muted); text-transform: uppercase;">NN AI</div>
+          <div id="lbl-acc-nn" style="font-weight: 700; color: var(--text-secondary); font-size: 0.65rem;">—</div>
+          <div id="lbl-pred-nn" style="font-size: 0.58rem; font-weight: 600; color: var(--accent-blue); margin-top: 2px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 2px;">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- High Odds Accuracy Tracker Section -->
+    <div id="high-odds-accuracy-section" style="
+      margin-top: 8px;
+      padding-top: 6px;
+      border-top: 1px dashed var(--border-color);
+    ">
+      <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; font-weight: 700; margin-bottom: 2px;">
+        <span>High Odds Accuracy (≥ 2.0x):</span>
+        <span id="lbl-high-odds-accuracy-pct" style="color: var(--accent-orange);">0%</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--text-secondary);">
+        <span id="lbl-high-odds-accuracy-wins">Passed: 0 / Failed: 0</span>
+        <span id="lbl-high-odds-accuracy-total">Total High Odds: 0</span>
+      </div>
+    </div>
+
+    <!-- P&L and Bet Size input section -->
+    <div class="pnl-section" style="
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px dashed var(--border-color);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    ">
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 600;">Bet Size:</span>
+        <input type="number" id="input-bet-size" value="10" min="0.1" step="any" style="
+          width: 50px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid var(--border-color);
+          border-radius: 4px;
+          padding: 2px 4px;
+          color: #fff;
+          font-size: 0.75rem;
+          font-weight: 700;
+          text-align: center;
+          outline: none;
+        ">
+      </div>
+      <div style="font-size: 0.72rem; font-weight: 700; display: flex; align-items: center; justify-content: flex-end; gap: 4px;">
+        <span style="color: var(--text-secondary);">Est. P&L:</span>
+        <span id="lbl-pnl-val" style="color: var(--text-primary);">0.00</span>
+      </div>
+      
+      <!-- Responsible Gaming / Daily Target section -->
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 600;">Target ($):</span>
+        <input type="number" id="input-daily-target" value="100" min="1" step="any" style="
+          width: 50px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid var(--border-color);
+          border-radius: 4px;
+          padding: 2px 4px;
+          color: #fff;
+          font-size: 0.75rem;
+          font-weight: 700;
+          text-align: center;
+          outline: none;
+        ">
+      </div>
+      <div style="font-size: 0.72rem; font-weight: 700; display: flex; align-items: center; justify-content: flex-end; gap: 4px;">
+        <span style="color: var(--text-secondary);">Status:</span>
+        <span id="lbl-target-status" style="color: var(--accent-blue);">ACTIVE</span>
+      </div>
+    </div>
+    
+    <!-- Verification logs sub-panel (Structured Table) -->
+    <div style="
+      font-size: 0.65rem;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 10px;
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    ">
+      <span>Live Verification Log</span>
+      <label style="text-transform: none; font-size: 0.68rem; color: var(--text-secondary); display: flex; align-items: center; gap: 4px; cursor: pointer; font-weight: 600;">
+        <input type="checkbox" id="chk-filter-high-odds" style="width: auto; margin: 0; cursor: pointer; transform: scale(1.05);">
+        Only ≥ <span id="lbl-filter-threshold-val">8x</span> Preds
+      </label>
+    </div>
+    <div style="
+      margin-top: 6px;
+      max-height: 105px;
+      overflow-y: auto;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.25);
+    ">
+      <table style="width: 100%; border-collapse: collapse; font-size: 0.7rem; font-family: monospace; text-align: left;">
+        <thead>
+          <tr style="background: rgba(255, 255, 255, 0.03); border-bottom: 1px solid var(--border-color);">
+            <th style="padding: 4px 6px; color: var(--text-muted); font-weight: 700;">Round</th>
+            <th style="padding: 4px 6px; color: var(--text-muted); font-weight: 700;">Pred.</th>
+            <th style="padding: 4px 6px; color: var(--text-muted); font-weight: 700;">Actual</th>
+            <th style="padding: 4px 6px; color: var(--text-muted); font-weight: 700; text-align: right;">Result</th>
+          </tr>
+        </thead>
+        <tbody id="verif-log-tbody">
+          <tr>
+            <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 8px 0;">No rounds verified yet.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Setup Control card -->
+  <div class="card">
+    <div class="form-group">
+      <label>AI Prediction Engine</label>
+      <select id="sel-engine">
+        <option value="auto">Auto (Best Performing Model)</option>
+        <option value="markov">Blended Markov Pattern Match</option>
+        <option value="knn">KNN Pattern Similarity Finder</option>
+        <option value="trend">Volatility &amp; Trend-Adaptive</option>
+        <option value="pareto">Pareto Probability Density</option>
+        <option value="nn">Neural Network Pattern Classifier</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Predictor Mode Target Strategy</label>
+      <select id="sel-mode">
+        <option value="safe">Safe Mode (Low Risk Targets)</option>
+        <option value="high">High Odds Hunter (Big Multipliers)</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Target Risk Level (Safety Margin)</label>
+      <select id="sel-safety">
+        <option value="max">Max Safety (Lowest Targets)</option>
+        <option value="high">High Safety (Conservative)</option>
+        <option value="standard" selected>Standard (Default)</option>
+        <option value="aggressive">Aggressive (Higher Targets)</option>
+      </select>
+    </div>
+
+    <div class="form-group" style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px; margin-bottom: 12px; background: rgba(255, 255, 255, 0.02); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-color);">
+      <label style="margin: 0; font-size: 0.72rem; cursor: pointer;" for="chk-loss-protection">Auto Loss-Streak Protection</label>
+      <input type="checkbox" id="chk-loss-protection" checked style="width: auto; margin: 0; transform: scale(1.1); cursor: pointer;">
+    </div>
+
+    <div class="form-group" style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px; margin-bottom: 12px; background: rgba(255, 255, 255, 0.02); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-color);">
+      <label style="margin: 0; font-size: 0.72rem; cursor: pointer;" for="chk-auto-skip">Auto-Skip High Risk Rounds</label>
+      <input type="checkbox" id="chk-auto-skip" checked style="width: auto; margin: 0; transform: scale(1.1); cursor: pointer;">
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="stat-lbl">Cold Streak (&lt;2x)</div>
+        <div class="stat-val" id="val-cold" style="color: var(--accent-blue);">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-lbl">Accumulated Rounds</div>
+        <div class="stat-val" id="history-count" style="color: var(--accent-green);">0</div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>History Sequence Direction</label>
+      <div class="toggle-row">
+        <div class="toggle-btn active" id="btn-dir-rev">Reversed (Newest Left)</div>
+        <div class="toggle-btn" id="btn-dir-normal">Chronological (Newest Right)</div>
+      </div>
+    </div>
+    
+    <button class="btn-danger" id="btn-clear-stats">🔄 Reset Logs &amp; Data Accumulation</button>
+  </div>
+
+
+
+  <!-- Dynamic Threshold Gap Analysis (Dual-Method: Overall vs Last 20) -->
+  <div class="card" style="border-left: 4px solid var(--accent-purple);">
+    <div class="card-title">
+      High Odds Gap Analysis
+      <div style="display: flex; align-items: center; gap: 3px; font-size: 0.72rem;">
+        <input type="number" id="sel-threshold" value="8" min="2" max="10000" style="
+          width: 45px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid var(--border-color);
+          border-radius: 4px;
+          padding: 1px 3px;
+          color: #fff;
+          font-weight: 700;
+          text-align: center;
+          outline: none;
+          margin: 0;
+          font-size: 0.72rem;
+        ">
+        <span style="color: var(--text-secondary); font-weight: 600;">x+</span>
+      </div>
+    </div>
+    
+    <!-- Quick Select Pills Grid -->
+    <div style="font-size: 0.65rem; color: var(--text-secondary); font-weight: 600; margin-top: 4px;">Quick Target Select:</div>
+    <div class="thresh-grid">
+      <button class="thresh-pill" data-val="2">2x</button>
+      <button class="thresh-pill" data-val="3">3x</button>
+      <button class="thresh-pill" data-val="4">4x</button>
+      <button class="thresh-pill" data-val="5">5x</button>
+      <button class="thresh-pill" data-val="6">6x</button>
+      <button class="thresh-pill" data-val="7">7x</button>
+      <button class="thresh-pill" data-val="8">8x</button>
+      <button class="thresh-pill" data-val="9">9x</button>
+      <button class="thresh-pill" data-val="10">10x</button>
+      <div style="display: flex; align-items: center; justify-content: center; font-size: 0.62rem; color: var(--text-muted); font-weight: 700; border: 1px dashed rgba(255,255,255,0.08); border-radius: 4px; padding: 4px 0; cursor: default; box-sizing: border-box;">Custom</div>
+    </div>
+    
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 4px;">
+      <!-- Column 1: Overall dataset -->
+      <div style="background: rgba(255, 255, 255, 0.015); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; font-size: 0.75rem;">
+        <div style="font-size: 0.65rem; color: var(--accent-purple); text-transform: uppercase; font-weight: 700; text-align: center; border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom: 4px; margin-bottom: 6px;">Overall Dataset</div>
+        <div class="gap-indicator"><span>Total Hits:</span><span id="gap-count" style="font-weight:700;">0</span></div>
+        <div class="gap-indicator"><span>Avg Gap:</span><span id="gap-avg" style="font-weight:700;">—</span></div>
+        <div class="gap-indicator"><span>Since Last:</span><span id="gap-since" style="font-weight:700;">—</span></div>
+        <div class="gap-indicator" style="margin-top: 5px;"><span>Forecast:</span><span id="gap-badge" class="badge-status">WAITING</span></div>
+      </div>
+      
+      <!-- Column 2: Last 20 rounds -->
+      <div style="background: rgba(255, 255, 255, 0.015); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; font-size: 0.75rem;">
+        <div style="font-size: 0.65rem; color: var(--accent-blue); text-transform: uppercase; font-weight: 700; text-align: center; border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom: 4px; margin-bottom: 6px;">Last 20 Rounds</div>
+        <div class="gap-indicator"><span>Total Hits:</span><span id="gap-count-20" style="font-weight:700;">0</span></div>
+        <div class="gap-indicator"><span>Avg Gap:</span><span id="gap-avg-20" style="font-weight:700;">—</span></div>
+        <div class="gap-indicator"><span>Since Last:</span><span id="gap-since-20" style="font-weight:700;">—</span></div>
+        <div class="gap-indicator" style="margin-top: 5px;"><span>Forecast:</span><span id="gap-badge-20" class="badge-status">WAITING</span></div>
+      </div>
+    </div>
+    
+    <!-- AI Target Accuracy for the selected threshold -->
+    <div style="
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px dashed var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.72rem;
+      color: var(--text-secondary);
+    ">
+      <span>AI Target Accuracy (<span id="lbl-gap-acc-threshold">8x</span>+):</span>
+      <span id="lbl-gap-accuracy-val" style="font-weight: 700; color: var(--accent-orange);">0% (0/0)</span>
+    </div>
+  </div>
+
+  <!-- Mega Outliers Analysis (1000x+) -->
+  <div class="card" style="border-left: 4px solid #f43f5e; background: rgba(244, 63, 94, 0.03);">
+    <div class="card-title" style="color: #f43f5e; font-weight: 800; text-shadow: 0 0 8px rgba(244, 63, 94, 0.25);">
+      🚀 Mega Outliers (1000x+)
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+      <div style="background: rgba(255, 255, 255, 0.015); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; font-size: 0.75rem;">
+        <div class="gap-indicator"><span>Total Hits:</span><span id="mega-count" style="font-weight:700; color: #f43f5e;">0</span></div>
+        <div class="gap-indicator" style="margin-top: 3px;"><span>Avg Gap:</span><span id="mega-avg" style="font-weight:700;">—</span></div>
+      </div>
+      <div style="background: rgba(255, 255, 255, 0.015); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; font-size: 0.75rem;">
+        <div class="gap-indicator"><span>Since Last:</span><span id="mega-since" style="font-weight:700;">—</span></div>
+        <div class="gap-indicator" style="margin-top: 5px;"><span>Forecast:</span><span id="mega-badge" class="badge-status">WAITING</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Clean Extracted Round History Grid -->
+  <div class="card">
+    <div class="card-title">Continuous Round History List</div>
+    <div class="odds-pill-list" id="history-pills">
+      <!-- Pills -->
+    </div>
+  </div>
+  </div> <!-- End of panel-predictor -->
+
+  <!-- Target Planner Panel Content -->
+  <div id="panel-planner" class="tab-panel" style="display: none;">
+    <!-- Goal Setup Card -->
+    <div class="card" style="border-left: 4px solid var(--accent-purple);">
+      <div class="card-title">Setup Daily Profit Goal</div>
+      
+      <div class="form-group">
+        <label>Daily Profit Target ($/Rs)</label>
+        <input type="number" id="input-planner-target" value="100" min="1" step="any" style="
+          width: 100%;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid var(--border-color);
+          border-radius: 6px;
+          padding: 6px 8px;
+          color: #fff;
+          font-size: 0.8rem;
+          box-sizing: border-box;
+          outline: none;
+          font-weight: 700;
+        ">
+      </div>
+
+      <div class="form-group">
+        <label>Starting Bankroll ($/Rs)</label>
+        <input type="number" id="input-planner-bankroll" value="10000" min="10" step="any" style="
+          width: 100%;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid var(--border-color);
+          border-radius: 6px;
+          padding: 6px 8px;
+          color: #fff;
+          font-size: 0.8rem;
+          box-sizing: border-box;
+          outline: none;
+          font-weight: 700;
+        ">
+      </div>
+
+      <div class="form-group">
+        <label>Base Bet Size ($/Rs)</label>
+        <input type="number" id="input-planner-bet" value="10" min="0.1" step="any" style="
+          width: 100%;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid var(--border-color);
+          border-radius: 6px;
+          padding: 6px 8px;
+          color: #fff;
+          font-size: 0.8rem;
+          box-sizing: border-box;
+          outline: none;
+          font-weight: 700;
+        ">
+      </div>
+
+      <div class="form-group">
+        <label>Betting Style & Target Strategy</label>
+        <select id="sel-planner-strategy">
+          <option value="safe" selected>Safe Strategy (Target: ~1.30x | Win Rate: ~80%)</option>
+          <option value="balanced">Balanced Strategy (Target: ~2.00x | Win Rate: ~50%)</option>
+          <option value="high">High Odds Strategy (Target: ~5.00x | Win Rate: ~20%)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Staking & Progression System</label>
+        <select id="sel-planner-staking">
+          <option value="flat" selected>Flat Betting (Constant Stake)</option>
+          <option value="kelly">Fractional Kelly (Bankroll-Adaptive)</option>
+          <option value="progression">High-Odds Step Progression (Loss-Adaptive)</option>
+          <option value="high_odds_smart">High-Odds Smart Staking (Outcome & PnL Dynamic)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- AI Recommendation & Strategy Card -->
+    <div class="card" style="border-left: 4px solid var(--accent-blue);">
+      <div class="card-title">AI Strategy Recommendations</div>
+      <div style="background: rgba(255, 255, 255, 0.015); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px; font-size: 0.78rem;">
+        <div style="margin-bottom: 6px; display: flex; justify-content: space-between;">
+          <span style="color: var(--text-secondary);">Recommended Model:</span>
+          <span id="planner-rec-model" style="font-weight: 800; color: var(--accent-green);">—</span>
+        </div>
+        <div style="margin-bottom: 6px; display: flex; justify-content: space-between;">
+          <span style="color: var(--text-secondary);">Current Model Accuracy:</span>
+          <span id="planner-rec-accuracy" style="font-weight: 800; color: #fff;">—</span>
+        </div>
+        <div style="margin-bottom: 6px; display: flex; justify-content: space-between;">
+          <span style="color: var(--text-secondary);">Recommended Target Multiplier:</span>
+          <span id="planner-rec-target" style="font-weight: 800; color: var(--accent-purple);">—</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+          <span style="color: var(--text-secondary);">Recommended Setup:</span>
+          <span id="planner-rec-setup" style="font-weight: 800; color: var(--accent-orange);">—</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Expected Results & Stop Loss Card -->
+    <div class="card" style="border-left: 4px solid var(--accent-orange);">
+      <div class="card-title">Expected Betting Plan</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+        <div style="background: rgba(255, 255, 255, 0.015); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; text-align: center;">
+          <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase;">Est. Rounds Needed</div>
+          <div id="planner-rounds-needed" style="font-size: 1.2rem; font-weight: 800; color: #fff; margin-top: 3px; font-family: monospace;">—</div>
+        </div>
+        <div style="background: rgba(255, 255, 255, 0.015); border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; text-align: center;">
+          <div style="font-size: 0.65rem; color: var(--text-secondary); text-transform: uppercase;">Recommended Stop-Loss</div>
+          <div id="planner-stop-loss" style="font-size: 1.2rem; font-weight: 800; color: var(--accent-red); margin-top: 3px; font-family: monospace;">—</div>
+        </div>
+        <div style="background: rgba(168, 85, 247, 0.1); border: 1.5px solid rgba(168, 85, 247, 0.35); border-radius: 6px; padding: 8px; text-align: center; grid-column: span 2;">
+          <div style="font-size: 0.68rem; color: #c084fc; text-transform: uppercase; font-weight: 700;">Recommended Next Bet Size</div>
+          <div id="planner-next-bet-val" style="font-size: 1.6rem; font-weight: 900; color: #fff; margin-top: 3px; font-family: monospace; text-shadow: 0 0 8px rgba(168, 85, 247, 0.4);">—</div>
+        </div>
+      </div>
+      <div id="planner-staking-instruction" style="margin-top: 8px; font-size: 0.72rem; color: var(--text-secondary); line-height: 1.38; padding: 6px 8px; background: rgba(255,255,255,0.02); border-radius: 6px; border: 1px solid var(--border-color);">
+        💡 <b>Staking Rule:</b> Place a flat bet of Rs. 10. Cashout automatically at the recommended target.
+      </div>
+    </div>
+
+    <!-- Live Goal Progress Card -->
+    <div class="card" style="border-left: 4px solid var(--accent-green);">
+      <div class="card-title">Live Goal Progress</div>
+      <div class="accuracy-header" style="font-size: 0.75rem;">
+        <span>Session Earnings Progress</span>
+        <span id="planner-progress-pct" style="color: var(--accent-green);">0%</span>
+      </div>
+      <div class="accuracy-bar-bg" style="height: 10px; margin-bottom: 8px;">
+        <div class="accuracy-bar-fill" id="planner-progress-bar" style="width: 0%; background: linear-gradient(90deg, var(--accent-purple), var(--accent-green));"></div>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 0.72rem; margin-bottom: 6px;">
+        <span style="color: var(--text-secondary);">Current Profit:</span>
+        <span id="planner-current-profit" style="font-weight: 700; color: var(--accent-green); font-family: monospace;">$0.00</span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 0.72rem; margin-bottom: 8px;">
+        <span style="color: var(--text-secondary);">Remaining Target:</span>
+        <span id="planner-remaining-profit" style="font-weight: 700; color: #fff; font-family: monospace;">$100.00</span>
+      </div>
+      <div id="planner-status-message" style="
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-align: center;
+        padding: 8px;
+        border-radius: 6px;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.25);
+        color: #93c5fd;
+      ">
+        STATUS: READY TO START
+      </div>
+    </div>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

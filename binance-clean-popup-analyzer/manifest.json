@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Binance Side Panel Analyzer",
+  "version": "2.0.0",
+  "description": "Real OHLCV Binance API analysis engine — multi-timeframe candle data, BTC correlation, pattern detection, and smart entry/exit signals.",
+  "permissions": [
+    "sidePanel",
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://*.binance.com/*",
+    "https://api.binance.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Open Binance Analyzer"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  }
+}

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aviator Betting Strategy Simulator & Statistics Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js for beautiful visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <div class="logo-container">
+                <span class="logo-icon">✈️</span>
+                <div class="logo-text">
+                    <h1>Aviator Strategy Bot</h1>
+                    <p>Simulator & Statistics Dashboard</p>
+                </div>
+            </div>
+            <div>
+                <span class="badge"><i class="fa-solid fa-triangle-exclamation"></i> Mathematical Analysis Mode</span>
+            </div>
+        </header>
+
+        <!-- Warning Alert Box -->
+        <div class="info-box">
+            <i class="fa-solid fa-shield-halved"></i>
+            <div>
+                <div class="info-box-title">Important Math & Safety Warning</div>
+                <p>Aviator uses a provably fair system where every round's outcome is randomly generated and independent. No software, screenshot parser, or human can predict the next round's multiplier. This tool is designed to analyze historical distribution and run simulations to demonstrate the extreme risks of betting strategies like Martingale.</p>
+            </div>
+        </div>
+
+        <!-- Dashboard Grid -->
+        <div class="dashboard-grid">
+            
+            <!-- Sidebar / Left Controls -->
+            <div class="sidebar">
+                
+                <!-- Data Input Card -->
+                <div class="card">
+                    <div class="card-title">
+                        <i class="fa-solid fa-database"></i> Input Multiplier Data
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="data-preset">Load Demo Data</label>
+                        <select id="data-preset">
+                            <option value="high-crash">High Crash Preset (Simulated Bad Streak)</option>
+                            <option value="normal-random" selected>Standard Random Sequence (100 rounds)</option>
+                            <option value="high-multiplier">Lucky Streak Preset (High Multipliers)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="multiplier-input">Round Multipliers (Comma Separated)</label>
+                        <textarea id="multiplier-input" rows="8" placeholder="e.g. 1.25, 2.10, 1.05, 5.40, 1.80, 12.30"></textarea>
+                        <span class="input-hint">Paste multiplier history from your game screen or paste CSV values.</span>
+                    </div>
+
+                    <button class="btn btn-secondary" id="btn-parse-data">
+                        <i class="fa-solid fa-calculator"></i> Calculate Data Stats
+                    </button>
+                </div>
+
+                <!-- Simulation Settings Card -->
+                <div class="card">
+                    <div class="card-title">
+                        <i class="fa-solid fa-sliders"></i> Simulator Settings
+                    </div>
+
+                    <div class="form-group">
+                        <label for="sim-strategy">Betting Strategy</label>
+                        <select id="sim-strategy">
+                            <option value="fixed">Fixed Target Cashout</option>
+                            <option value="martingale">Martingale (Double bet on loss)</option>
+                            <option value="fibonacci">Fibonacci Progression</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="sim-balance">Starting Balance</label>
+                            <input type="number" id="sim-balance" value="1000" min="10">
+                        </div>
+                        <div class="form-group">
+                            <label for="sim-base-bet">Base Bet</label>
+                            <input type="number" id="sim-base-bet" value="10" min="1">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="sim-target-odd">Target Cashout Odd</label>
+                            <input type="number" id="sim-target-odd" value="2.0" step="0.1" min="1.01">
+                        </div>
+                        <div class="form-group">
+                            <label for="sim-martingale-multiplier">Martingale Multiplier</label>
+                            <input type="number" id="sim-martingale-multiplier" value="2.0" step="0.1" min="1">
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary" id="btn-run-simulation">
+                        <i class="fa-solid fa-play"></i> Run Strategy Simulation
+                    </button>
+                </div>
+
+            </div>
+
+            <!-- Main Panel / Right Side Content -->
+            <div class="main-content">
+                
+                <!-- Statistical Overview -->
+                <div class="card">
+                    <div class="card-title">
+                        <i class="fa-solid fa-chart-pie"></i> Historical Odds Distribution & Statistics
+                    </div>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <div class="stat-label">Total Rounds</div>
+                            <div class="stat-value" id="stat-total">0</div>
+                            <div class="stat-sub">Analyzed rounds</div>
+                        </div>
+                        <div class="stat-box green">
+                            <div class="stat-label">Average Odd</div>
+                            <div class="stat-value" id="stat-avg">0.00x</div>
+                            <div class="stat-sub">Mean multiplier</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Median Odd</div>
+                            <div class="stat-value" id="stat-median">0.00x</div>
+                            <div class="stat-sub">Middle value of data</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Highest Odd</div>
+                            <div class="stat-value" id="stat-max">0.00x</div>
+                            <div class="stat-sub">Max multiplier</div>
+                        </div>
+                    </div>
+
+                    <!-- Visual distributions -->
+                    <div class="dist-container">
+                        <div class="dist-row">
+                            <span class="dist-label">Instant Crash (&lt; 1.2x)</span>
+                            <div class="dist-bar-wrapper">
+                                <div class="dist-bar level-1" id="dist-1" style="width: 0%;"></div>
+                            </div>
+                            <span class="dist-value" id="dist-val-1">0%</span>
+                        </div>
+                        <div class="dist-row">
+                            <span class="dist-label">Low Odds (1.2x - 2.0x)</span>
+                            <div class="dist-bar-wrapper">
+                                <div class="dist-bar level-2" id="dist-2" style="width: 0%;"></div>
+                            </div>
+                            <span class="dist-value" id="dist-val-2">0%</span>
+                        </div>
+                        <div class="dist-row">
+                            <span class="dist-label">Medium Odds (2.0x - 5.0x)</span>
+                            <div class="dist-bar-wrapper">
+                                <div class="dist-bar level-3" id="dist-3" style="width: 0%;"></div>
+                            </div>
+                            <span class="dist-value" id="dist-val-3">0%</span>
+                        </div>
+                        <div class="dist-row">
+                            <span class="dist-label">High Odds (&gt; 5.0x)</span>
+                            <div class="dist-bar-wrapper">
+                                <div class="dist-bar level-4" id="dist-4" style="width: 0%;"></div>
+                            </div>
+                            <span class="dist-value" id="dist-val-4">0%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Simulation Chart -->
+                <div class="card">
+                    <div class="card-title">
+                        <i class="fa-solid fa-chart-line"></i> Strategy Balance Simulation Performance
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="balanceChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Results & Log Tables -->
+                <div class="result-panels">
+                    
+                    <!-- Simulation Overview / Stats -->
+                    <div class="card">
+                        <div class="card-title">
+                            <i class="fa-solid fa-list-check"></i> Simulation Summary
+                        </div>
+                        <div class="stats-grid" style="grid-template-columns: 1fr 1fr;">
+                            <div class="stat-box">
+                                <div class="stat-label">Ending Balance</div>
+                                <div class="stat-value" id="sim-result-balance">$0.00</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-label">Net Profit / Loss</div>
+                                <div class="stat-value" id="sim-result-profit">$0.00</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-label">Wins / Losses</div>
+                                <div class="stat-value" id="sim-result-winloss">0 / 0</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-label">Max Consecutive Loss</div>
+                                <div class="stat-value" id="sim-result-streak">0</div>
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-top: 1rem;">
+                            <label>Odds List parsed</label>
+                            <div class="multipliers-list" id="multipliers-container">
+                                <!-- Tags will load here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Simulator Log -->
+                    <div class="card">
+                        <div class="card-title">
+                            <i class="fa-solid fa-clock-rotate-left"></i> Run Simulation Log
+                        </div>
+                        <div class="log-box" id="sim-log">
+                            Click 'Run Strategy Simulation' to view round-by-round strategy logs.
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>
