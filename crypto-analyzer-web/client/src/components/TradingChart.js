@@ -9,6 +9,7 @@ export default function TradingChart({ data, targets, theme = 'dark' }) {
   const ema7Ref = useRef(null);
   const ema25Ref = useRef(null);
   const ema99Ref = useRef(null);
+  const projectedPathRef = useRef(null);
 
   const [legend, setLegend] = React.useState(null);
 
@@ -41,8 +42,9 @@ export default function TradingChart({ data, targets, theme = 'dark' }) {
       timeScale: {
         borderColor: borderColor,
         timeVisible: true,
-        fixLeftEdge: true,
-        fixRightEdge: true,
+        fixLeftEdge: false,
+        fixRightEdge: false,
+        rightOffset: 15,
       },
     });
 
@@ -59,6 +61,14 @@ export default function TradingChart({ data, targets, theme = 'dark' }) {
     const ema7Series = chart.addSeries(LineSeries, { color: '#EAB308', lineWidth: 1, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false });
     const ema25Series = chart.addSeries(LineSeries, { color: '#EC4899', lineWidth: 1, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false });
     const ema99Series = chart.addSeries(LineSeries, { color: '#8B5CF6', lineWidth: 1, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false });
+    const projectedPathSeries = chart.addSeries(LineSeries, { 
+      color: '#00ff88', 
+      lineWidth: 2, 
+      lineStyle: 3, // Dashed line (lightweight-charts uses numbers for style: 0=Solid, 1=Dotted, 2=Dashed, 3=LargeDashed)
+      crosshairMarkerVisible: false, 
+      lastValueVisible: true,
+      title: 'AI Path'
+    });
 
     // Save refs for updates
     chartRef.current = chart;
@@ -66,6 +76,7 @@ export default function TradingChart({ data, targets, theme = 'dark' }) {
     ema7Ref.current = ema7Series;
     ema25Ref.current = ema25Series;
     ema99Ref.current = ema99Series;
+    projectedPathRef.current = projectedPathSeries;
 
     // Crosshair update
     chart.subscribeCrosshairMove(param => {
@@ -149,6 +160,9 @@ export default function TradingChart({ data, targets, theme = 'dark' }) {
     if (data.ema7 && ema7Ref.current) ema7Ref.current.setData(data.ema7);
     if (data.ema25 && ema25Ref.current) ema25Ref.current.setData(data.ema25);
     if (data.ema99 && ema99Ref.current) ema99Ref.current.setData(data.ema99);
+    if (projectedPathRef.current) {
+      projectedPathRef.current.setData(data.projectedPath || []);
+    }
     
     // Set initial legend to last candle
     const last = data.candles[data.candles.length - 1];

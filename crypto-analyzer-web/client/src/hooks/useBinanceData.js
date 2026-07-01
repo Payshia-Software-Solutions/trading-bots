@@ -16,7 +16,7 @@ import {
   getConfidenceLabel,
 } from '../utils/indicators';
 
-export function useBinanceData(symbol, mode) {
+export function useBinanceData(symbol, mode, riskMode = 'safe') {
   const [data, setData] = useState({
     ticker: null,
     indicators: null,
@@ -56,6 +56,7 @@ export function useBinanceData(symbol, mode) {
       const payload = {
         pair: newSignal.pair,
         mode: newSignal.mode,
+        risk_mode: newSignal.riskMode || 'safe',
         current_price: newSignal.entryPrice,
         buy_target: newSignal.targets.buyLimit,
         sell_target: newSignal.targets.tp2,
@@ -212,21 +213,21 @@ export function useBinanceData(symbol, mode) {
       if (!checks.btc) score = 0;
 
       // ══════════════════════════════════════════════
-      // TRADITIONAL SIGNAL LOGIC (Primary — 5-condition strict gate)
+      // TRADITIONAL SIGNAL LOGIC (Primary — 6-condition strict gate)
       // ══════════════════════════════════════════════
       const lastTickOpen = scalpCandles[scalpCandles.length - 1].open;
       const isGreenCandle = currentPrice > lastTickOpen;
-      const isOversold = previousRsiVal < 38; // Stricter: was 35
+      
+      // Dynamic RSI Threshold based on Risk Mode
+      const rsiThreshold = riskMode === 'aggressive' ? 45 : 38;
+      const isOversold = previousRsiVal < rsiThreshold;
       const rsiBendingUp = rsiVal > previousRsiVal;
+      
       const isMacroTrendUp = ema9_1h > ema21_1h; // 1H EMA9 > EMA21
-      const isBtcSafeForTrading = btcHealth >= 2; // HARD BLOCK: BTC must be >= 2/4
-
-      // All 5 base conditions must pass
-      const condition1 = currentPrice < ema25;          // Discount zone
-      const condition2 = isOversold && rsiBendingUp;    // RSI oversold recovery
-      const condition3 = isMacroTrendUp;                // 1H bullish structure
-      const condition4 = isBtcSafeForTrading;           // BTC safety gate (HARD)
-      const condition5 = isGreenCandle;                 // Buyers stepping in
+      
+      // Dynamic BTC Health based on Risk Mode
+      const minBtcHealth = riskMode === 'aggressive' ? 1 : 2;
+      const isBtcSafeForTrading = btcHealth >= minBtcHealth;
 
       // ── Precise SL/TP using swing levels ──
       // SL: nearest swing low below current price (with 0.3% buffer)
@@ -268,6 +269,17 @@ export function useBinanceData(symbol, mode) {
       // Condition 6: No body break allowed. Rejection wick is bonus (not mandatory)
       const condition6 = !isBodyBreak;
 
+      // All 5 base conditions must pass
+      const condition1 = currentPrice < ema25;          // Discount zone
+      const condition2 = isOversold && rsiBendingUp;    // RSI oversold recovery
+      
+      // In aggressive mode, if there is a strong rejection wick, we can bypass the 1H macro trend requirement
+      const condition3 = isMacroTrendUp || (riskMode === 'aggressive' && isRejectionWick);
+      
+      const condition4 = isBtcSafeForTrading;           // BTC safety gate
+      const condition5 = isGreenCandle;                 // Buyers stepping in
+
+
       const isSetupActive = condition1 && condition2 && condition3 && condition4 && condition5 && condition6;
 
       // ── Confidence & Risk scores ──
@@ -284,11 +296,11 @@ export function useBinanceData(symbol, mode) {
       const failedConditions = [];
       if (!condition1) failedConditions.push(`Price above EMA25 (${ema25.toFixed(4)})`);
       if (!condition2) {
-        if (!isOversold) failedConditions.push(`RSI not oversold (${rsiVal.toFixed(1)} > 38)`);
+        if (!isOversold) failedConditions.push(`RSI not oversold (${rsiVal.toFixed(1)} > ${rsiThreshold})`);
         if (!rsiBendingUp) failedConditions.push('RSI still falling');
       }
-      if (!condition3) failedConditions.push('1H Bearish Structure (EMA9 < EMA21)');
-      if (!condition4) failedConditions.push(`BTC too weak (Health: ${btcHealth}/4)`);
+      if (!condition3) failedConditions.push(riskMode === 'aggressive' ? '1H Bearish & No Rejection Wick' : '1H Bearish Structure (EMA9 < EMA21)');
+      if (!condition4) failedConditions.push(`BTC too weak (Health: ${btcHealth}/4, Min: ${minBtcHealth})`);
       if (!condition5) failedConditions.push('No green candle');
       if (!condition6) failedConditions.push('⚠️ Support Level Body Break — Level Invalid');
       if (isSetupActive && !hasMinRR) failedConditions.push(`R:R too low (${rrRatioTP1.toFixed(2)} < 1.5)`);
@@ -331,6 +343,7 @@ export function useBinanceData(symbol, mode) {
             riskLevel,
             score: confidenceScore,
             status: 'BUY ACTIVE',
+            riskMode: riskMode
           };
           
           saveSignal(autoSignal).catch(e => console.error("Auto save failed", e));
@@ -388,6 +401,11 @@ export function useBinanceData(symbol, mode) {
             noBodyBreak: condition6,
             rejectionWick: isRejectionWick, // bonus, not mandatory
           },
+          thresholds: {
+            rsi: rsiThreshold,
+            btcHealth: minBtcHealth,
+            macroTrendLabel: riskMode === 'aggressive' ? '1H Bullish OR Rejection Wick' : '1H Macro Bullish (EMA9 > EMA21)',
+          },
           failedConditions,
         }
       };
@@ -426,6 +444,50 @@ export function useBinanceData(symbol, mode) {
         '4h': getChartBundle(candles4h)
       };
 
+      // Calculate 1-Week Projected Path (Elliott Wave style 5-wave structure)
+      const dayMs = 24 * 60 * 60 * 1000;
+      const lastTime = scalpCandles[scalpCandles.length - 1].time;
+      
+      let projectedPath = [];
+      if (score >= 4) {
+        // Bullish Elliott Wave (5-wave impulse up)
+        const wave1Val = swingHighTP1;
+        const wave2Val = currentPrice + (swingHighTP1 - currentPrice) * 0.3; // Pullback
+        const wave3Val = swingHighTP2;
+        const wave4Val = swingHighTP2 - (swingHighTP2 - wave2Val) * 0.3; // Corrective consolidation
+        const wave5Val = swingHighTP2 + (swingHighTP2 - currentPrice) * 0.4; // Final target extension
+
+        projectedPath = [
+          { time: Math.floor(lastTime / 1000), value: currentPrice },
+          { time: Math.floor((lastTime + dayMs * 1.5) / 1000), value: wave1Val }, // Wave 1 (1.5 days)
+          { time: Math.floor((lastTime + dayMs * 2.5) / 1000), value: wave2Val }, // Wave 2 (2.5 days)
+          { time: Math.floor((lastTime + dayMs * 4.5) / 1000), value: wave3Val }, // Wave 3 (4.5 days)
+          { time: Math.floor((lastTime + dayMs * 5.5) / 1000), value: wave4Val }, // Wave 4 (5.5 days)
+          { time: Math.floor((lastTime + dayMs * 7.0) / 1000), value: wave5Val }, // Wave 5 (7.0 days)
+        ];
+      } else {
+        // Bearish Elliott Wave (5-wave impulse down)
+        const wave1Val = swingLowSL;
+        const wave2Val = swingLowSL + (currentPrice - swingLowSL) * 0.4; // Dead cat bounce
+        const wave3Val = swingLowSL - (currentPrice - swingLowSL) * 1.2; // Break down
+        const wave4Val = wave3Val + (wave2Val - wave3Val) * 0.3; // Corrective bounce
+        const wave5Val = wave3Val - (currentPrice - swingLowSL) * 1.5; // Final capitulation bottom
+
+        projectedPath = [
+          { time: Math.floor(lastTime / 1000), value: currentPrice },
+          { time: Math.floor((lastTime + dayMs * 1.5) / 1000), value: wave1Val },
+          { time: Math.floor((lastTime + dayMs * 2.5) / 1000), value: wave2Val },
+          { time: Math.floor((lastTime + dayMs * 4.5) / 1000), value: wave3Val },
+          { time: Math.floor((lastTime + dayMs * 5.5) / 1000), value: wave4Val },
+          { time: Math.floor((lastTime + dayMs * 7.0) / 1000), value: wave5Val },
+        ];
+      }
+
+      const activeTfKey = mode === 'scalp' ? '15m' : '1h';
+      if (chartData[activeTfKey]) {
+        chartData[activeTfKey].projectedPath = projectedPath;
+      }
+
       setData({
         ticker: { ...ticker, currentPrice, symbol },
         indicators: {
@@ -459,7 +521,7 @@ export function useBinanceData(symbol, mode) {
     runAnalysis();
     const interval = setInterval(runAnalysis, 5000);
     return () => clearInterval(interval);
-  }, [symbol, mode]);
+  }, [symbol, mode, riskMode]);
 
   return { data, activeTrade, setActiveTrade, signalHistory, saveSignal, updateSignalStatus, runAnalysis };
 }

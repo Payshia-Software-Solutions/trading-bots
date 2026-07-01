@@ -28,7 +28,20 @@ export default function Home() {
     }
     return "BTCUSDT";
   });
-  const [mode, setMode] = useState("scalp"); // 'scalp' | 'swing'
+  const [mode, setMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('mode') || "scalp";
+    }
+    return "scalp";
+  }); // 'scalp' | 'swing'
+  const [riskMode, setRiskMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('risk') || "safe";
+    }
+    return "safe";
+  }); // 'safe' | 'aggressive'
   const [theme, setTheme] = useState("dark");
   const [lang, setLang] = useState("en");
   const [chartTimeframe, setChartTimeframe] = useState("15m");
@@ -196,7 +209,7 @@ export default function Home() {
     return true;
   });
 
-  const { data, activeTrade, setActiveTrade, runAnalysis } = useBinanceData(symbol, mode);
+  const { data, activeTrade, setActiveTrade, runAnalysis } = useBinanceData(symbol, mode, riskMode);
   const sim = useSimulation();
 
   useEffect(() => {
@@ -265,6 +278,24 @@ export default function Home() {
     }
   }, [data?.ticker?.currentPrice, symbol]);
 
+
+  const handleModeChange = (newMode) => {
+    setMode(newMode);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location);
+      url.searchParams.set('mode', newMode);
+      window.history.pushState({}, '', url);
+    }
+  };
+
+  const handleRiskModeChange = (newRisk) => {
+    setRiskMode(newRisk);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location);
+      url.searchParams.set('risk', newRisk);
+      window.history.pushState({}, '', url);
+    }
+  };
 
   const handleWatch = (selectedCoin) => {
     const coinToSet = typeof selectedCoin === 'string' ? selectedCoin : inputSymbol.trim().toUpperCase();
@@ -388,7 +419,7 @@ export default function Home() {
             {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
           </button>
           
-          <Link href={`/demo?symbol=${symbol}&mode=${mode}`}>
+          <Link href={`/demo?symbol=${symbol}&mode=${mode}&risk=${riskMode}`}>
             <button className="btn" style={{background: 'var(--color-warning)', color: '#000', fontSize: '12px'}}>
               <CheckCircle2 size={14} /> Demo Trading
             </button>
@@ -446,15 +477,28 @@ export default function Home() {
           <div className="mode-selector card">
             <button 
               className={`btn-mode ${mode === 'scalp' ? 'active' : ''}`}
-              onClick={() => setMode('scalp')}
+              onClick={() => handleModeChange('scalp')}
             ><Zap size={16} /> SCALP (15m)</button>
             <button 
               className={`btn-mode ${mode === 'swing' ? 'active' : ''}`}
-              onClick={() => setMode('swing')}
+              onClick={() => handleModeChange('swing')}
             ><TrendingUp size={16} /> SWING (4h)</button>
           </div>
 
-          <div className="card price-card glass">
+          <div className="mode-selector card" style={{ marginTop: '12px', background: 'rgba(255,255,255,0.02)' }}>
+            <button 
+              className={`btn-mode ${riskMode === 'safe' ? 'active' : ''}`}
+              onClick={() => handleRiskModeChange('safe')}
+              style={{ padding: '6px', fontSize: '11px', color: riskMode === 'safe' ? 'var(--neon-green)' : 'inherit', border: riskMode === 'safe' ? '1px solid rgba(0,255,136,0.3)' : 'none' }}
+            >🛡️ SAFE (Sniper)</button>
+            <button 
+              className={`btn-mode ${riskMode === 'aggressive' ? 'active' : ''}`}
+              onClick={() => handleRiskModeChange('aggressive')}
+              style={{ padding: '6px', fontSize: '11px', color: riskMode === 'aggressive' ? '#ff5555' : 'inherit', border: riskMode === 'aggressive' ? '1px solid rgba(255,85,85,0.3)' : 'none' }}
+            >🚀 AGGRESSIVE</button>
+          </div>
+
+          <div className="card price-card glass" style={{ marginTop: '12px' }}>
             <div className="card-header">
               <span className="pair-name"><Bitcoin size={24} className="text-warning" /> {symbol.replace("USDT", "/USDT")}</span>
               <div className="live-indicator">
@@ -485,16 +529,16 @@ export default function Home() {
             <ul className="checklist-items">
               {activePlan === 'traditional' ? (
                 <>
-                  <li className={`chk-item ${activePlanData?.conditions?.discountPrice ? 'met' : ''}`}>
+                  <li className={activePlanData?.conditions?.discountPrice ? "active" : ""}>
                     {activePlanData?.conditions?.discountPrice ? <CheckCircle2 className="chk-icon" /> : <XCircle className="chk-icon" />} Discount Price (Live &lt; EMA 25)
                   </li>
-                  <li className={`chk-item ${activePlanData?.conditions?.oversold ? 'met' : ''}`}>
-                    {activePlanData?.conditions?.oversold ? <CheckCircle2 className="chk-icon" /> : <XCircle className="chk-icon" />} Deep Oversold (Prev RSI &lt; 35)
+                  <li className={activePlanData?.conditions?.oversold ? "active" : ""}>
+                    {activePlanData?.conditions?.oversold ? <CheckCircle2 className="chk-icon" /> : <XCircle className="chk-icon" />} Deep Oversold (Prev RSI &lt; {activePlanData?.thresholds?.rsi || 38})
                   </li>
-                  <li className={`chk-item ${activePlanData?.conditions?.rsiBendingUp ? 'met' : ''}`}>
-                    {activePlanData?.conditions?.rsiBendingUp ? <CheckCircle2 className="chk-icon" /> : <XCircle className="chk-icon" />} Momentum Shift (RSI Bending Up)
+                  <li className={activePlanData?.conditions?.macroTrend ? "active" : ""}>
+                    {activePlanData?.conditions?.macroTrend ? <CheckCircle2 className="chk-icon" /> : <XCircle className="chk-icon" />} {activePlanData?.thresholds?.macroTrendLabel || 'Macro Trend'}
                   </li>
-                  <li className={`chk-item ${activePlanData?.conditions?.greenCandle ? 'met' : ''}`}>
+                  <li className={activePlanData?.conditions?.greenCandle ? "active" : ""}>
                     {activePlanData?.conditions?.greenCandle ? <CheckCircle2 className="chk-icon" /> : <XCircle className="chk-icon" />} Buyers Entered (Green Candle)
                   </li>
                 </>
@@ -533,7 +577,6 @@ export default function Home() {
               </Link>
             </div>
             
-            {/* We no longer render geminiReport here inline. It's rendered in a Modal at the bottom of the page. */}
             <ul style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', listStyleType: 'none', padding: 0, margin: 0 }}>
                 {data.scoreData?.analysisLog?.length > 0 ? (
                   data.scoreData.analysisLog.map((log, i) => (
@@ -819,8 +862,8 @@ export default function Home() {
                     </div>
                     <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                       <span style={{color: 'var(--text-muted)', fontWeight: '600'}}>RSI (14) Value:</span>
-                      <strong style={{color: activePlanData.rsi < 38 ? 'var(--color-success)' : 'var(--color-warning)'}}>
-                        {activePlanData.rsi?.toFixed(2)} {activePlanData.rsi < 38 ? '(✅ Oversold)' : '(⏳ Wait for < 38)'}
+                      <strong style={{color: activePlanData.rsi < (activePlanData.thresholds?.rsi || 38) ? 'var(--color-success)' : 'var(--color-warning)'}}>
+                        {activePlanData.rsi?.toFixed(2)} {activePlanData.rsi < (activePlanData.thresholds?.rsi || 38) ? '(✅ Oversold)' : `(⏳ Wait for < ${activePlanData.thresholds?.rsi || 38})`}
                       </strong>
                     </div>
                     {/* Condition Checklist */}
@@ -828,9 +871,9 @@ export default function Home() {
                       <div style={{fontSize: '10px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: '800', letterSpacing: '0.5px'}}>6-CONDITION GATE</div>
                       {[
                         {label: 'Price < EMA25 (Discount)', ok: activePlanData.conditions?.discountPrice},
-                        {label: 'RSI Oversold & Recovering', ok: activePlanData.conditions?.oversold},
-                        {label: '1H Macro Bullish (EMA9 > EMA21)', ok: activePlanData.conditions?.macroTrend},
-                        {label: 'BTC Health ≥ 2/4', ok: activePlanData.conditions?.btcSafe},
+                        {label: `RSI Oversold (< ${activePlanData.thresholds?.rsi || 38}) & Recovering`, ok: activePlanData.conditions?.oversold},
+                        {label: activePlanData.thresholds?.macroTrendLabel || '1H Macro Bullish (EMA9 > EMA21)', ok: activePlanData.conditions?.macroTrend},
+                        {label: `BTC Health ≥ ${activePlanData.thresholds?.btcHealth || 2}/4`, ok: activePlanData.conditions?.btcSafe},
                         {label: 'Green Candle (Buyers In)', ok: activePlanData.conditions?.greenCandle},
                         {label: 'No Body Break (Level Valid)', ok: activePlanData.conditions?.noBodyBreak},
                       ].map((c, i) => (
@@ -1421,7 +1464,7 @@ export default function Home() {
           </div>
           <span>Home</span>
         </Link>
-        <Link href={`/demo?symbol=${symbol}&mode=${mode}`} className="dock-item">
+        <Link href={`/demo?symbol=${symbol}&mode=${mode}&risk=${riskMode}`} className="dock-item">
           <div className="dock-icon-wrapper">
             <CheckCircle2 size={20} />
           </div>

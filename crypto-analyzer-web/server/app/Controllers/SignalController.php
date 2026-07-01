@@ -31,13 +31,15 @@ class SignalController {
         
         if (!empty($data['pair']) && !empty($data['mode'])) {
             try {
-                $query = "INSERT INTO signals (pair, mode, current_price, buy_target, sell_target, stop_loss, rr_ratio, score, status, confidence_level, risk_level) 
-                          VALUES (:pair, :mode, :current_price, :buy_target, :sell_target, :stop_loss, :rr_ratio, :score, :status, :confidence_level, :risk_level)";
+                $query = "INSERT INTO signals (pair, mode, risk_mode, current_price, buy_target, sell_target, stop_loss, rr_ratio, score, status, confidence_level, risk_level) 
+                          VALUES (:pair, :mode, :risk_mode, :current_price, :buy_target, :sell_target, :stop_loss, :rr_ratio, :score, :status, :confidence_level, :risk_level)";
                 
                 $stmt = $this->db->prepare($query);
                 
                 $stmt->bindParam(":pair", $data['pair']);
                 $stmt->bindParam(":mode", $data['mode']);
+                $risk_mode = isset($data['risk_mode']) ? $data['risk_mode'] : 'safe';
+                $stmt->bindParam(":risk_mode", $risk_mode);
                 $stmt->bindParam(":current_price", $data['current_price']);
                 $stmt->bindParam(":buy_target", $data['buy_target']);
                 $stmt->bindParam(":sell_target", $data['sell_target']);

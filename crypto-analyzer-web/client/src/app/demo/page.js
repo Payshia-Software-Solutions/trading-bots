@@ -15,6 +15,7 @@ function DemoContent() {
   const router = useRouter();
   const symbol = searchParams.get("symbol") || "BTCUSDT";
   const mode = searchParams.get("mode") || "scalp";
+  const riskMode = searchParams.get("risk") || "safe";
   const [theme, setTheme] = useState("dark");
   const [chartTimeframe, setChartTimeframe] = useState("15m");
   const [signalHistory, setSignalHistory] = useState([]);
@@ -24,7 +25,7 @@ function DemoContent() {
   const [marketSearch, setMarketSearch] = useState("");
   const [tradeSizes, setTradeSizes] = useState({});
   
-  const { data, activeTrade } = useBinanceData(symbol, mode);
+  const { data, activeTrade } = useBinanceData(symbol, mode, riskMode);
   const sim = useSimulation();
 
   useEffect(() => {
@@ -88,6 +89,11 @@ function DemoContent() {
         </div>
         
         <div className="header-actions">
+          <Link href={`/demo?symbol=${symbol}&mode=${mode}&risk=${riskMode === 'safe' ? 'aggressive' : 'safe'}`}>
+            <button className="btn" style={{background: 'var(--bg-secondary)', color: riskMode === 'aggressive' ? '#ff5555' : 'var(--neon-green)', fontSize: '12px', border: `1px solid ${riskMode === 'aggressive' ? 'rgba(255,85,85,0.3)' : 'rgba(0,255,136,0.3)'}`, marginRight: '8px'}}>
+              {riskMode === 'aggressive' ? '🚀 AGGRESSIVE' : '🛡️ SAFE (Sniper)'}
+            </button>
+          </Link>
           <button onClick={toggleTheme} className="icon-btn">
             {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
           </button>
@@ -152,7 +158,7 @@ function DemoContent() {
                     <div key={sig.id} style={{background: 'var(--bg-secondary)', padding: '12px', borderRadius: '8px', borderLeft: `3px solid ${sig.confidence_level === 'HIGH' ? 'var(--neon-green)' : sig.confidence_level === 'LOW' ? 'var(--neon-red)' : 'var(--accent-blue)'}`, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
                       <div>
                         <div style={{fontSize: '14px', fontWeight: 'bold'}}>{sig.pair}</div>
-                        <div style={{fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px'}}>{sig.mode?.toUpperCase()}</div>
+                        <div style={{fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px'}}>{sig.mode?.toUpperCase()} - {sig.risk_mode ? sig.risk_mode.toUpperCase() : 'SAFE'}</div>
                         {/* Confidence + Risk Badges */}
                         <div style={{display: 'flex', gap: '4px', flexWrap: 'wrap'}}>
                           {sig.confidence_level && (
