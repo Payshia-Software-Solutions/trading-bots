@@ -228,6 +228,24 @@ export function useBinanceData(symbol, mode) {
       const condition4 = isBtcSafeForTrading;           // BTC safety gate (HARD)
       const condition5 = isGreenCandle;                 // Buyers stepping in
 
+      // ── Precise SL/TP using swing levels ──
+      // SL: nearest swing low below current price (with 0.3% buffer)
+      const swingLowSL = findSwingLow(scalpCandles, currentPrice, 20);
+      // TP1: nearest swing high above current price
+      const swingHighTP1 = findSwingHigh(scalpCandles, currentPrice, 30);
+      // TP2: TP1 + 50% extension of TP1-entry distance
+      const tp1Distance = swingHighTP1 - currentPrice;
+      const swingHighTP2 = swingHighTP1 + tp1Distance * 0.5;
+
+      const tradeRisk = currentPrice - swingLowSL;
+      const tradeRewardTP1 = swingHighTP1 - currentPrice;
+      const tradeRewardTP2 = swingHighTP2 - currentPrice;
+      const rrRatioTP1 = tradeRisk > 0 ? tradeRewardTP1 / tradeRisk : 0;
+      const rrRatioTP2 = tradeRisk > 0 ? tradeRewardTP2 / tradeRisk : 0;
+
+      // Minimum R:R 1.5 required to fire
+      const hasMinRR = rrRatioTP1 >= 1.5;
+
       // ── Condition 6: Candle Body/Wick Break Analysis (Human Analyst Method) ──
       const prevCandle    = scalpCandles[scalpCandles.length - 2]; // last closed candle
       const currCandle    = scalpCandles[scalpCandles.length - 1]; // live candle
@@ -251,24 +269,6 @@ export function useBinanceData(symbol, mode) {
       const condition6 = !isBodyBreak;
 
       const isSetupActive = condition1 && condition2 && condition3 && condition4 && condition5 && condition6;
-
-      // ── Precise SL/TP using swing levels ──
-      // SL: nearest swing low below current price (with 0.3% buffer)
-      const swingLowSL = findSwingLow(scalpCandles, currentPrice, 20);
-      // TP1: nearest swing high above current price
-      const swingHighTP1 = findSwingHigh(scalpCandles, currentPrice, 30);
-      // TP2: TP1 + 50% extension of TP1-entry distance
-      const tp1Distance = swingHighTP1 - currentPrice;
-      const swingHighTP2 = swingHighTP1 + tp1Distance * 0.5;
-
-      const tradeRisk = currentPrice - swingLowSL;
-      const tradeRewardTP1 = swingHighTP1 - currentPrice;
-      const tradeRewardTP2 = swingHighTP2 - currentPrice;
-      const rrRatioTP1 = tradeRisk > 0 ? tradeRewardTP1 / tradeRisk : 0;
-      const rrRatioTP2 = tradeRisk > 0 ? tradeRewardTP2 / tradeRisk : 0;
-
-      // Minimum R:R 1.5 required to fire
-      const hasMinRR = rrRatioTP1 >= 1.5;
 
       // ── Confidence & Risk scores ──
       const confidenceScore = calculateConfidenceScore({
