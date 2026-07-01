@@ -187,7 +187,8 @@ export function findSwingHigh(candles, currentPrice, lookback = 30) {
 export function calculateConfidenceScore({
   rsiVal, previousRsiVal, macd, macdSignal,
   volCurrent, volAvg, btcHealth, isVolumeSpike,
-  ema50_4h, currentPrice, pattern
+  ema50_4h, currentPrice, pattern,
+  isRejectionWick, volAtLevel
 }) {
   let score = 0;
 
@@ -218,6 +219,11 @@ export function calculateConfidenceScore({
 
   // Candle pattern bonus
   if (pattern !== 'None') score += 1;
+
+  // 🎯 Rejection Wick bonus (human analyst key signal)
+  // Wick touches support but body closes above → buyers defended the level
+  if (isRejectionWick && volAtLevel) score += 2;  // rejection wick + volume = very strong
+  else if (isRejectionWick) score += 1;            // rejection wick alone = good
 
   return Math.min(Math.round(score), 10);
 }

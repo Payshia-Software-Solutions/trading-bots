@@ -825,19 +825,36 @@ export default function Home() {
                     </div>
                     {/* Condition Checklist */}
                     <div style={{marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.05)'}}>
-                      <div style={{fontSize: '10px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: '800', letterSpacing: '0.5px'}}>5-CONDITION GATE</div>
+                      <div style={{fontSize: '10px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: '800', letterSpacing: '0.5px'}}>6-CONDITION GATE</div>
                       {[
                         {label: 'Price < EMA25 (Discount)', ok: activePlanData.conditions?.discountPrice},
                         {label: 'RSI Oversold & Recovering', ok: activePlanData.conditions?.oversold},
                         {label: '1H Macro Bullish (EMA9 > EMA21)', ok: activePlanData.conditions?.macroTrend},
                         {label: 'BTC Health ≥ 2/4', ok: activePlanData.conditions?.btcSafe},
                         {label: 'Green Candle (Buyers In)', ok: activePlanData.conditions?.greenCandle},
+                        {label: 'No Body Break (Level Valid)', ok: activePlanData.conditions?.noBodyBreak},
                       ].map((c, i) => (
                         <div key={i} style={{display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px', fontSize: '11px'}}>
                           <span>{c.ok ? '✅' : '❌'}</span>
                           <span style={{color: c.ok ? 'var(--text-primary)' : 'var(--text-muted)'}}>{c.label}</span>
                         </div>
                       ))}
+                      {/* Candle Break Analysis */}
+                      {(activePlanData.bodyBreakInfo || activePlanData.rejectionWickInfo) && (
+                        <div style={{marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.05)'}}>
+                          <div style={{fontSize: '10px', color: 'var(--text-muted)', marginBottom: '4px', fontWeight: '800', letterSpacing: '0.5px'}}>CANDLE BREAK ANALYSIS</div>
+                          {activePlanData.bodyBreakInfo && (
+                            <div style={{fontSize: '10px', color: '#ff5555', fontWeight: '700', padding: '4px 6px', background: 'rgba(255,50,50,0.08)', borderRadius: '4px', marginBottom: '4px'}}>
+                              {activePlanData.bodyBreakInfo}
+                            </div>
+                          )}
+                          {activePlanData.rejectionWickInfo && (
+                            <div style={{fontSize: '10px', color: 'var(--neon-green)', fontWeight: '700', padding: '4px 6px', background: 'rgba(0,255,136,0.08)', borderRadius: '4px'}}>
+                              {activePlanData.rejectionWickInfo}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

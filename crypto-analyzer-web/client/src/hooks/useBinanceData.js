@@ -221,14 +221,36 @@ export function useBinanceData(symbol, mode) {
       const isMacroTrendUp = ema9_1h > ema21_1h; // 1H EMA9 > EMA21
       const isBtcSafeForTrading = btcHealth >= 2; // HARD BLOCK: BTC must be >= 2/4
 
-      // All 5 conditions must pass
+      // All 5 base conditions must pass
       const condition1 = currentPrice < ema25;          // Discount zone
       const condition2 = isOversold && rsiBendingUp;    // RSI oversold recovery
       const condition3 = isMacroTrendUp;                // 1H bullish structure
       const condition4 = isBtcSafeForTrading;           // BTC safety gate (HARD)
       const condition5 = isGreenCandle;                 // Buyers stepping in
 
-      const isSetupActive = condition1 && condition2 && condition3 && condition4 && condition5;
+      // ── Condition 6: Candle Body/Wick Break Analysis (Human Analyst Method) ──
+      const prevCandle    = scalpCandles[scalpCandles.length - 2]; // last closed candle
+      const currCandle    = scalpCandles[scalpCandles.length - 1]; // live candle
+      const refLevel      = swingLowSL; // key support level
+
+      // ❌ HARD BLOCK: If last CLOSED candle body closes BELOW support → level broken, don't buy
+      const isBodyBreak = prevCandle.close < refLevel;
+
+      // ✅ BULLISH SIGNAL: Wick dips below support but CLOSES back above (rejection wick)
+      // e.g. wick: 1.78, close: 1.82 → buyers defended the level
+      const isRejectionWick =
+        prevCandle.low < refLevel &&              // wick touched/broke support
+        prevCandle.close > refLevel &&            // but body closed above it
+        prevCandle.close > prevCandle.open;       // green candle (buyers won)
+
+      // ✅ Volume confirmation at the level (volume spike during rejection = strong)
+      const prevVol     = volumes[volumes.length - 2];
+      const volAtLevel  = prevVol > volAvg * 1.3; // at least 1.3x avg volume at this level
+
+      // Condition 6: No body break allowed. Rejection wick is bonus (not mandatory)
+      const condition6 = !isBodyBreak;
+
+      const isSetupActive = condition1 && condition2 && condition3 && condition4 && condition5 && condition6;
 
       // ── Precise SL/TP using swing levels ──
       // SL: nearest swing low below current price (with 0.3% buffer)
@@ -252,7 +274,8 @@ export function useBinanceData(symbol, mode) {
       const confidenceScore = calculateConfidenceScore({
         rsiVal, previousRsiVal, macd, macdSignal,
         volCurrent, volAvg, btcHealth, isVolumeSpike,
-        ema50_4h, currentPrice, pattern
+        ema50_4h, currentPrice, pattern,
+        isRejectionWick, volAtLevel
       });
       const confidenceLabel = getConfidenceLabel(confidenceScore);
       const riskLevel = calculateRiskLevel(rrRatioTP2, btcHealth);
@@ -262,12 +285,21 @@ export function useBinanceData(symbol, mode) {
       if (!condition1) failedConditions.push(`Price above EMA25 (${ema25.toFixed(4)})`);
       if (!condition2) {
         if (!isOversold) failedConditions.push(`RSI not oversold (${rsiVal.toFixed(1)} > 38)`);
-        if (!rsiBendingUp) failedConditions.push("RSI still falling");
+        if (!rsiBendingUp) failedConditions.push('RSI still falling');
       }
-      if (!condition3) failedConditions.push("1H Bearish Structure (EMA9 < EMA21)");
+      if (!condition3) failedConditions.push('1H Bearish Structure (EMA9 < EMA21)');
       if (!condition4) failedConditions.push(`BTC too weak (Health: ${btcHealth}/4)`);
-      if (!condition5) failedConditions.push("No green candle");
+      if (!condition5) failedConditions.push('No green candle');
+      if (!condition6) failedConditions.push('⚠️ Support Level Body Break — Level Invalid');
       if (isSetupActive && !hasMinRR) failedConditions.push(`R:R too low (${rrRatioTP1.toFixed(2)} < 1.5)`);
+
+      // Rejection wick bonus info
+      const rejectionWickInfo = isRejectionWick
+        ? `✅ Rejection Wick at ${refLevel.toFixed(4)} — Buyers defended level` + (volAtLevel ? ' (HIGH VOLUME)' : '')
+        : '';
+      const bodyBreakInfo = isBodyBreak
+        ? `🔴 Body Break at ${refLevel.toFixed(4)} — Support broken, trade invalid`
+        : '';
 
       const waitReason = failedConditions.length > 0
         ? failedConditions[0] // Show the most important blocker
@@ -341,12 +373,20 @@ export function useBinanceData(symbol, mode) {
           confidenceScore,
           confidenceLabel,
           riskLevel,
+          // Candle break analysis data
+          isBodyBreak,
+          isRejectionWick,
+          volAtLevel,
+          bodyBreakInfo,
+          rejectionWickInfo,
           conditions: {
             discountPrice: condition1,
             oversold: condition2,
             macroTrend: condition3,
             btcSafe: condition4,
             greenCandle: condition5,
+            noBodyBreak: condition6,
+            rejectionWick: isRejectionWick, // bonus, not mandatory
           },
           failedConditions,
         }

@@ -1,13 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useBinanceData } from "../../hooks/useBinanceData";
 import { Activity, Sparkles, Loader, AlertCircle, Home as HomeIcon, CheckCircle2, Moon, Sun, Settings, ChevronLeft, ArrowRight, Clock } from "lucide-react";
 import './analyst.css';
 
-export default function AnalystPage() {
+function AnalystContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const initialSymbol = searchParams.get("coin") || "BTCUSDT";
@@ -391,4 +391,13 @@ Be specific with prices. Use the technical levels provided above. Write in conve
     </div>
   );
 }
+
+export default function AnalystPage() {
+  return (
+    <Suspense fallback={<div style={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'var(--bg-primary)'}}><Loader className="spin" size={32} color="var(--neon-purple)" /></div>}>
+      <AnalystContent />
+    </Suspense>
+  );
+}
+
 
