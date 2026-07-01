@@ -31,8 +31,8 @@ class SignalController {
         
         if (!empty($data['pair']) && !empty($data['mode'])) {
             try {
-                $query = "INSERT INTO signals (pair, mode, current_price, buy_target, sell_target, stop_loss, rr_ratio, score, status) 
-                          VALUES (:pair, :mode, :current_price, :buy_target, :sell_target, :stop_loss, :rr_ratio, :score, :status)";
+                $query = "INSERT INTO signals (pair, mode, current_price, buy_target, sell_target, stop_loss, rr_ratio, score, status, confidence_level, risk_level) 
+                          VALUES (:pair, :mode, :current_price, :buy_target, :sell_target, :stop_loss, :rr_ratio, :score, :status, :confidence_level, :risk_level)";
                 
                 $stmt = $this->db->prepare($query);
                 
@@ -46,6 +46,10 @@ class SignalController {
                 $stmt->bindParam(":score", $data['score']);
                 $status = isset($data['status']) ? $data['status'] : 'PENDING';
                 $stmt->bindParam(":status", $status);
+                $confidence_level = isset($data['confidence_level']) ? $data['confidence_level'] : 'MODERATE';
+                $stmt->bindParam(":confidence_level", $confidence_level);
+                $risk_level = isset($data['risk_level']) ? $data['risk_level'] : 'MEDIUM';
+                $stmt->bindParam(":risk_level", $risk_level);
                 
                 if ($stmt->execute()) {
                     http_response_code(201);

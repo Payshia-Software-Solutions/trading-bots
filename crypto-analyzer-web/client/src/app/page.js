@@ -8,7 +8,7 @@ import { generateGeminiReport, getGeminiTradeTargets } from "../utils/gemini";
 import { t } from "../utils/translations";
 import { 
   Activity, BarChart2, Bitcoin, CheckCircle2, ChevronRight, 
-  Clock, LineChart, Moon, Sun, TrendingUp, XCircle, Zap, Star, AlertTriangle, ShieldCheck, List, X, Home as HomeIcon, Settings
+  Clock, LineChart, Moon, Sun, TrendingUp, XCircle, Zap, Star, AlertTriangle, ShieldCheck, List, X, Home as HomeIcon, Settings, Sparkles, Loader
 } from "lucide-react";
 import TradingChart from "../components/TradingChart";
 import Link from 'next/link';
@@ -40,8 +40,6 @@ export default function Home() {
   const [marketTab, setMarketTab] = useState("all"); // 'all' | 'fav'
   const [marketSearch, setMarketSearch] = useState("");
   const [geminiKey, setGeminiKey] = useState("");
-  const [geminiReport, setGeminiReport] = useState("");
-  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [geminiTargets, setGeminiTargets] = useState(null);
   const [isGeneratingTargets, setIsGeneratingTargets] = useState(false);
   const [geminiError, setGeminiError] = useState("");
@@ -146,6 +144,10 @@ export default function Home() {
     if (savedGemini) {
       setGeminiKey(savedGemini);
     }
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme) {
+      setTheme(savedTheme);
+    }
     fetchSignals();
 
     // URL checking is now handled by useState lazy initialization
@@ -244,6 +246,14 @@ export default function Home() {
     else document.body.classList.remove("light");
   }, [theme]);
 
+  const toggleTheme = () => {
+    setTheme(prev => {
+      const next = prev === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('theme', next);
+      return next;
+    });
+  };
+
   useEffect(() => {
     if (data?.ticker?.currentPrice) {
       const price = parseFloat(data.ticker.currentPrice);
@@ -255,7 +265,6 @@ export default function Home() {
     }
   }, [data?.ticker?.currentPrice, symbol]);
 
-  const toggleTheme = () => setTheme(prev => prev === "dark" ? "light" : "dark");
 
   const handleWatch = (selectedCoin) => {
     const coinToSet = typeof selectedCoin === 'string' ? selectedCoin : inputSymbol.trim().toUpperCase();
@@ -413,7 +422,25 @@ export default function Home() {
         <div className="pulse-line"></div>
       </header>
 
-      <div className="dashboard-grid">
+      <div className="dashboard-grid" style={{ position: 'relative' }}>
+        
+        {/* Preloader Overlay */}
+        {data.loading && (
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, 
+            background: 'rgba(var(--bg-primary-rgb, 10, 10, 15), 0.7)', 
+            backdropFilter: 'blur(8px)', zIndex: 50,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)'
+          }}>
+            <Loader size={48} className="spin" style={{ color: 'var(--accent-blue)', marginBottom: '16px' }} />
+            <h2 style={{ color: 'var(--text-primary)', margin: '0 0 8px 0', fontSize: '20px' }}>Analyzing {symbol}</h2>
+            <div style={{ color: 'var(--text-muted)', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Activity size={14} className="pulse" /> Fetching live market data...
+            </div>
+          </div>
+        )}
+
         {/* Left Column */}
         <div className="col">
           <div className="mode-selector card">
@@ -496,32 +523,18 @@ export default function Home() {
           <div className="card checklist-card glass" style={{ marginTop: '16px', padding: '16px' }}>
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px'}}>
               <h3 className="section-title" style={{ fontSize: '13px', margin: 0 }}><Activity size={16} /> Analysis Reasoning</h3>
-              <button 
-                onClick={async () => {
-                  if (!geminiKey) return alert("Please enter your Gemini API Key in the top right corner.");
-                  setIsGeneratingReport(true);
-                  try {
-                    const timeStr = new Date().toLocaleTimeString();
-                    const report = await generateGeminiReport(geminiKey, symbol, data, timeStr);
-                    setGeminiReport(report);
-                  } catch (e) {
-                    alert("Error generating report: " + e.message);
-                  } finally {
-                    setIsGeneratingReport(false);
-                  }
-                }}
+              <Link 
+                href={`/analyst?coin=${symbol}`}
                 className="btn primary-btn"
-                style={{padding: '4px 8px', fontSize: '11px', minHeight: '24px', background: 'var(--neon-purple)', color: '#fff'}}
-                disabled={isGeneratingReport}
+                style={{padding: '4px 8px', fontSize: '11px', minHeight: '24px', background: 'var(--neon-purple)', color: '#fff', textDecoration: 'none', display: 'flex', alignItems: 'center'}}
               >
                 <Zap size={12} style={{marginRight: '4px'}} />
-                {isGeneratingReport ? "Wait..." : "AI Report"}
-              </button>
+                AI Report
+              </Link>
             </div>
             
             {/* We no longer render geminiReport here inline. It's rendered in a Modal at the bottom of the page. */}
-            {(!geminiReport || true) && (
-              <ul style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', listStyleType: 'none', padding: 0, margin: 0 }}>
+            <ul style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', listStyleType: 'none', padding: 0, margin: 0 }}>
                 {data.scoreData?.analysisLog?.length > 0 ? (
                   data.scoreData.analysisLog.map((log, i) => (
                     <li key={i} style={{ color: 'var(--text-muted)', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
@@ -534,7 +547,6 @@ export default function Home() {
                   <li style={{ color: 'var(--text-muted)' }}>Waiting for clear signals...</li>
                 )}
               </ul>
-            )}
           </div>
         </div>
 
@@ -773,6 +785,27 @@ export default function Home() {
                   <h4 style={{margin: '0 0 10px 0', fontSize: '11px', fontWeight: '800', color: 'var(--accent-blue)', display: 'flex', alignItems: 'center', gap: '6px'}}>
                     <Activity size={14} /> LIVE ALGORITHM STATUS
                   </h4>
+                  {/* Confidence + Risk Badges */}
+                  {activePlanData.confidenceLabel && (
+                    <div style={{display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap'}}>
+                      <span style={{
+                        padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '800',
+                        background: activePlanData.confidenceLabel === 'HIGH' ? 'rgba(0,255,136,0.15)' : activePlanData.confidenceLabel === 'MODERATE' ? 'rgba(255,200,0,0.15)' : 'rgba(255,60,60,0.15)',
+                        color: activePlanData.confidenceLabel === 'HIGH' ? 'var(--neon-green)' : activePlanData.confidenceLabel === 'MODERATE' ? 'var(--neon-yellow, #f5c842)' : 'var(--neon-red)',
+                        border: `1px solid ${activePlanData.confidenceLabel === 'HIGH' ? 'var(--neon-green)' : activePlanData.confidenceLabel === 'MODERATE' ? '#f5c842' : 'var(--neon-red)'}`,
+                      }}>
+                        {activePlanData.confidenceLabel === 'HIGH' ? '🟢' : activePlanData.confidenceLabel === 'MODERATE' ? '🟡' : '🔴'} CONFIDENCE: {activePlanData.confidenceLabel} ({activePlanData.confidenceScore}/10)
+                      </span>
+                      <span style={{
+                        padding: '3px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: '800',
+                        background: activePlanData.riskLevel === 'LOW' ? 'rgba(0,255,136,0.15)' : activePlanData.riskLevel === 'MEDIUM' ? 'rgba(255,200,0,0.15)' : 'rgba(255,60,60,0.15)',
+                        color: activePlanData.riskLevel === 'LOW' ? 'var(--neon-green)' : activePlanData.riskLevel === 'MEDIUM' ? '#f5c842' : 'var(--neon-red)',
+                        border: `1px solid ${activePlanData.riskLevel === 'LOW' ? 'var(--neon-green)' : activePlanData.riskLevel === 'MEDIUM' ? '#f5c842' : 'var(--neon-red)'}`,
+                      }}>
+                        {activePlanData.riskLevel === 'LOW' ? '🟢' : activePlanData.riskLevel === 'MEDIUM' ? '🟡' : '🔴'} RISK: {activePlanData.riskLevel}
+                      </span>
+                    </div>
+                  )}
                   <div style={{display: 'flex', flexDirection: 'column', gap: '6px'}}>
                     <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                       <span style={{color: 'var(--text-muted)', fontWeight: '600'}}>Current Price:</span>
@@ -786,9 +819,25 @@ export default function Home() {
                     </div>
                     <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
                       <span style={{color: 'var(--text-muted)', fontWeight: '600'}}>RSI (14) Value:</span>
-                      <strong style={{color: activePlanData.rsi < 35 ? 'var(--color-success)' : 'var(--color-warning)'}}>
-                        {activePlanData.rsi?.toFixed(2)} {activePlanData.rsi < 35 ? '(✅ Oversold)' : '(⏳ Wait for < 35)'}
+                      <strong style={{color: activePlanData.rsi < 38 ? 'var(--color-success)' : 'var(--color-warning)'}}>
+                        {activePlanData.rsi?.toFixed(2)} {activePlanData.rsi < 38 ? '(✅ Oversold)' : '(⏳ Wait for < 38)'}
                       </strong>
+                    </div>
+                    {/* Condition Checklist */}
+                    <div style={{marginTop: '8px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.05)'}}>
+                      <div style={{fontSize: '10px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: '800', letterSpacing: '0.5px'}}>5-CONDITION GATE</div>
+                      {[
+                        {label: 'Price < EMA25 (Discount)', ok: activePlanData.conditions?.discountPrice},
+                        {label: 'RSI Oversold & Recovering', ok: activePlanData.conditions?.oversold},
+                        {label: '1H Macro Bullish (EMA9 > EMA21)', ok: activePlanData.conditions?.macroTrend},
+                        {label: 'BTC Health ≥ 2/4', ok: activePlanData.conditions?.btcSafe},
+                        {label: 'Green Candle (Buyers In)', ok: activePlanData.conditions?.greenCandle},
+                      ].map((c, i) => (
+                        <div key={i} style={{display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px', fontSize: '11px'}}>
+                          <span>{c.ok ? '✅' : '❌'}</span>
+                          <span style={{color: c.ok ? 'var(--text-primary)' : 'var(--text-muted)'}}>{c.label}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -1361,61 +1410,21 @@ export default function Home() {
           </div>
           <span>Demo</span>
         </Link>
+        <Link href={`/analyst?coin=${symbol}`} className="dock-item">
+          <div className="dock-icon-wrapper" style={{ color: 'var(--neon-purple)' }}>
+            <Sparkles size={20} />
+          </div>
+          <span>Analyst</span>
+        </Link>
         <button className="dock-item" onClick={toggleTheme}>
           <div className="dock-icon-wrapper">
             {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
           </div>
           <span>Theme</span>
         </button>
-        <button className="dock-item" onClick={() => {
-          const newKey = prompt("Enter Gemini API Key:", geminiKey);
-          if (newKey !== null) {
-            setGeminiKey(newKey);
-            localStorage.setItem('geminiKey', newKey);
-          }
-        }}>
-          <div className="dock-icon-wrapper">
-            <Settings size={20} />
-          </div>
-          <span>Settings</span>
-        </button>
       </nav>
 
-      {/* Gemini Report Modal */}
-      {geminiReport && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-          backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 99999, 
-          display: 'flex', justifyContent: 'center', alignItems: 'center',
-          backdropFilter: 'blur(4px)', padding: '20px'
-        }}>
-          <div className="card glass" style={{ 
-            width: '100%', maxWidth: '600px', maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-            position: 'relative', border: '1px solid var(--neon-purple)', borderRadius: '12px', overflow: 'hidden'
-          }}>
-            
-            <div style={{ padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-secondary)' }}>
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0, color: 'var(--neon-purple)' }}>
-                <Zap size={18} /> AI Market Analyst ({symbol})
-              </h3>
-              <button 
-                onClick={() => setGeminiReport("")} 
-                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
 
-            <div style={{ padding: '24px', overflowY: 'auto', flex: 1, fontSize: '14px', lineHeight: '1.8', color: 'var(--text-primary)', whiteSpace: 'pre-wrap' }}>
-              {geminiReport}
-            </div>
-            
-            <div style={{ padding: '12px 24px', borderTop: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center' }}>
-              Generated by Gemini 2.5 Flash API based on real-time {symbol} data.
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );

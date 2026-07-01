@@ -34,30 +34,14 @@ export default function SimulationDashboard({ sim }) {
   };
 
   return (
-    <div className="card glass" style={{ marginBottom: '16px' }}>
+    <>
+      <div className="card glass" style={{ marginBottom: '16px' }}>
       <div style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--card-border)', flexWrap: 'wrap', gap: '12px' }}>
         <h3 className="section-title" style={{ margin: 0 }}><Activity size={16} /> SIGNAL EVALUATOR (DEMO)</h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-secondary)', padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--card-border)' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Trade Size:</span>
-            <div style={{ position: 'relative' }}>
-              <span style={{ position: 'absolute', left: '6px', top: '50%', transform: 'translateY(-50%)', fontSize: '11px', color: 'var(--text-muted)' }}>$</span>
-              <input 
-                type="number" 
-                value={tradeSize}
-                onChange={(e) => updateTradeSize(Number(e.target.value) || 100)}
-                style={{ 
-                  background: 'transparent', 
-                  border: 'none', 
-                  color: 'var(--text-primary)', 
-                  width: '60px', 
-                  fontSize: '12px',
-                  paddingLeft: '16px',
-                  outline: 'none',
-                  fontWeight: 'bold'
-                }}
-              />
-            </div>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Status:</span>
+            <span style={{ fontSize: '11px', color: 'var(--neon-green)', fontWeight: 'bold' }}>LIVE</span>
           </div>
           <button 
             onClick={() => {
@@ -72,47 +56,69 @@ export default function SimulationDashboard({ sim }) {
         </div>
       </div>
       
+      
       {/* Analytics Panel */}
-      <div style={{ display: 'flex', gap: '16px', padding: '16px', flexWrap: 'wrap', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--card-border)' }}>
-        <div style={{ flex: 1, minWidth: '120px' }}>
-          <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '4px', textTransform: 'uppercase' }}>Total Equity</div>
-          <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--text-primary)' }}>
-            ${totalEquity.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-          </div>
-          <div style={{ fontSize: '12px', color: totalPnL >= 0 ? 'var(--neon-green)' : 'var(--neon-red)' }}>
-            {totalPnL >= 0 ? '+$' : '-$'}{Math.abs(totalPnL).toFixed(2)} ({totalPnL >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%)
-          </div>
-        </div>
+      <div style={{ padding: '16px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--card-border)' }}>
         
-        <div style={{ flex: 1, minWidth: '120px', borderLeft: '1px solid var(--card-border)', paddingLeft: '16px' }}>
-          <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '4px', textTransform: 'uppercase' }}>Win Rate</div>
-          <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--accent-blue)' }}>
-            {winRate}%
+        {/* Capital Breakdown */}
+        <div style={{ display: 'flex', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '4px', textTransform: 'uppercase' }}>Available Balance</div>
+            <div style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--text-primary)' }}>
+              ${demoBalance.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+            </div>
           </div>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-            {wonTrades} W / {totalTrades - wonTrades} L
+          <div style={{ flex: 1, borderLeft: '1px solid var(--card-border)', paddingLeft: '16px' }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '4px', textTransform: 'uppercase' }}>In Trades (Margin)</div>
+            <div style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--accent-blue)' }}>
+              ${(totalEquity - demoBalance - unrealizedPnL).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+            </div>
+          </div>
+          <div style={{ flex: 1, borderLeft: '1px solid var(--card-border)', paddingLeft: '16px' }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '4px', textTransform: 'uppercase' }}>Total Equity</div>
+            <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--text-primary)' }}>
+              ${totalEquity.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+            </div>
+            <div style={{ fontSize: '11px', color: totalPnL >= 0 ? 'var(--neon-green)' : 'var(--neon-red)' }}>
+              {totalPnL >= 0 ? '+$' : '-$'}{Math.abs(totalPnL).toFixed(2)} ({totalPnL >= 0 ? '+' : ''}{pnlPercent.toFixed(2)}%)
+            </div>
           </div>
         </div>
 
-        <div style={{ flex: 1, minWidth: '120px', borderLeft: '1px solid var(--card-border)', paddingLeft: '16px' }}>
-          <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '4px', textTransform: 'uppercase' }}>Best Trade</div>
-          <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--neon-green)' }}>
-            {bestTrade ? `+$${bestTrade.finalPnl.toFixed(2)}` : '-'}
+        {/* Stats */}
+        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '16px' }}>
+          <div style={{ flex: 1, minWidth: '120px' }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '4px', textTransform: 'uppercase' }}>Win Rate</div>
+            <div style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--accent-blue)' }}>
+              {winRate}%
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+              {wonTrades} W / {totalTrades - wonTrades} L
+            </div>
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{bestTrade ? bestTrade.pair : '-'}</div>
-        </div>
-        
-        <div style={{ flex: 1, minWidth: '120px', borderLeft: '1px solid var(--card-border)', paddingLeft: '16px' }}>
-          <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '4px', textTransform: 'uppercase' }}>Worst Trade</div>
-          <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--neon-red)' }}>
-            {worstTrade ? `-$${Math.abs(worstTrade.finalPnl).toFixed(2)}` : '-'}
+
+          <div style={{ flex: 1, minWidth: '120px', borderLeft: '1px solid var(--card-border)', paddingLeft: '16px' }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '4px', textTransform: 'uppercase' }}>Best Trade</div>
+            <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--neon-green)' }}>
+              {bestTrade ? `+$${bestTrade.finalPnl.toFixed(2)}` : '-'}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{bestTrade ? bestTrade.pair : '-'}</div>
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{worstTrade ? worstTrade.pair : '-'}</div>
+          
+          <div style={{ flex: 1, minWidth: '120px', borderLeft: '1px solid var(--card-border)', paddingLeft: '16px' }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: '11px', marginBottom: '4px', textTransform: 'uppercase' }}>Worst Trade</div>
+            <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--neon-red)' }}>
+              {worstTrade ? `-$${Math.abs(worstTrade.finalPnl).toFixed(2)}` : '-'}
+            </div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{worstTrade ? worstTrade.pair : '-'}</div>
+          </div>
         </div>
       </div>
+    </div>
 
+    <div>
       {activeDemoTrades.length > 0 && (
-        <div style={{ padding: '16px' }}>
+        <div className="card glass" style={{ marginBottom: '16px', padding: '16px' }}>
           <h4 style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Target size={14} /> LIVE TRADE TRACKER
           </h4>
@@ -200,5 +206,6 @@ export default function SimulationDashboard({ sim }) {
         </div>
       )}
     </div>
+    </>
   );
 }

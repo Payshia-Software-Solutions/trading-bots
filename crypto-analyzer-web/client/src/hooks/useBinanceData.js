@@ -8,7 +8,12 @@ import {
   detectCandlePattern,
   findNearestSwingLevels,
   calculateEMAArray,
-  calculateRSIFullArray
+  calculateRSIFullArray,
+  findSwingLow,
+  findSwingHigh,
+  calculateConfidenceScore,
+  calculateRiskLevel,
+  getConfidenceLabel,
 } from '../utils/indicators';
 
 export function useBinanceData(symbol, mode) {
@@ -53,11 +58,13 @@ export function useBinanceData(symbol, mode) {
         mode: newSignal.mode,
         current_price: newSignal.entryPrice,
         buy_target: newSignal.targets.buyLimit,
-        sell_target: newSignal.targets.sellTarget,
+        sell_target: newSignal.targets.tp2,
         stop_loss: newSignal.targets.stopLoss,
         rr_ratio: parseFloat(newSignal.targets.rrRatio),
-        score: newSignal.score,
-        status: newSignal.status
+        score: newSignal.confidenceScore,
+        status: newSignal.status,
+        confidence_level: newSignal.confidenceLabel,
+        risk_level: newSignal.riskLevel,
       };
 
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}/trading-bots/crypto-analyzer-web/server/public` : 'http://localhost/trading-bots/crypto-analyzer-web/server/public');
@@ -74,7 +81,6 @@ export function useBinanceData(symbol, mode) {
       }
     } catch (err) {
       console.error("Failed to save signal to DB", err);
-      // Fallback to local state if DB fails
       setSignalHistory(prev => [newSignal, ...prev].slice(0, 50));
     }
   };
@@ -106,37 +112,47 @@ export function useBinanceData(symbol, mode) {
       const scalpCandles = mode === 'scalp' ? candles15m : candles1h;
       const currentPrice = livePrice || scalpCandles[scalpCandles.length - 1].close;
       
-      // Use all candles including the live forming one, and inject the exact live tick price
       const closes = scalpCandles.map(c => c.close);
       closes[closes.length - 1] = currentPrice;
       
       const volumes = scalpCandles.map(c => c.volume);
 
+      // ── RSI ──
       const rsiArr = calculateRSIFullArray(closes, 14);
       const rsiVal = rsiArr[rsiArr.length - 1];
       const previousRsiVal = rsiArr[rsiArr.length - 2];
+
+      // ── EMAs ──
       const ema9 = calculateEMA(closes, 9);
       const ema21 = calculateEMA(closes, 21);
+      const ema25 = calculateEMA(closes, 25);
       
       const closes1h = candles1h.slice(0, -1).map(c => c.close);
       const closes4h = candles4h.slice(0, -1).map(c => c.close);
+      const ema9_1h  = calculateEMA(closes1h, 9);
+      const ema21_1h = calculateEMA(closes1h, 21);
       const ema50_1h = calculateEMA(closes1h, 50);
       const ema50_4h = calculateEMA(closes4h, 50);
 
+      // ── MACD ──
       const { macd, signal: macdSignal } = calculateMACD(closes);
+
+      // ── Volume ──
       const volAvg = calculateAverage(volumes.slice(-21, -1));
       const volCurrent = volumes[volumes.length - 1];
       const isVolumeSpike = volCurrent >= volAvg * 1.5;
+
+      // ── Candle Pattern ──
       const pattern = detectCandlePattern(scalpCandles.slice(-4));
 
+      // ── Swing Levels (for score system) ──
       const minGainPct = mode === 'scalp' ? 1.5 : 3.0;
       const srCandles = mode === 'scalp' ? candles1h.slice(0, -1) : candles4h.slice(0, -1);
-      const { support, resistance, targetType } = findNearestSwingLevels(srCandles, currentPrice, minGainPct);
+      const { support, resistance } = findNearestSwingLevels(srCandles, currentPrice, minGainPct);
 
-      // BTC Health
+      // ── BTC Health (4-point scale) ──
       const btcLivePrice = btcCandles15m[btcCandles15m.length - 1].close;
       const btcPrevPrice = btcCandles1h[btcCandles1h.length - 2].close;
-      const btc15mPct = ((btcLivePrice - btcPrevPrice) / btcPrevPrice) * 100;
       
       let btcHealth = 0;
       let btcReason = "";
@@ -170,7 +186,9 @@ export function useBinanceData(symbol, mode) {
       const btcIsSafe = btcHealth >= 1;
       const btcIsStrong = btcHealth >= 3;
 
-      // Score
+      // ══════════════════════════════════════════════
+      // SCORE SYSTEM (Secondary — kept for dashboard)
+      // ══════════════════════════════════════════════
       let score = 0;
       const checks = {
         support: currentPrice <= support * 1.015,
@@ -190,44 +208,79 @@ export function useBinanceData(symbol, mode) {
       if (checks.volume) score++;
       if (checks.pattern) score++;
       if (checks.trend) score++;
-      if (checks.btc && btcIsStrong) score++; // bonus
-      
-      if (!checks.btc) score = 0; // Hard block
+      if (checks.btc && btcIsStrong) score++;
+      if (!checks.btc) score = 0;
 
-      // Traditional Mode Logic
-      const ema25 = calculateEMA(closes, 25);
-      
+      // ══════════════════════════════════════════════
+      // TRADITIONAL SIGNAL LOGIC (Primary — 5-condition strict gate)
+      // ══════════════════════════════════════════════
       const lastTickOpen = scalpCandles[scalpCandles.length - 1].open;
       const isGreenCandle = currentPrice > lastTickOpen;
-      const isOversold = previousRsiVal < 35;
+      const isOversold = previousRsiVal < 38; // Stricter: was 35
       const rsiBendingUp = rsiVal > previousRsiVal;
+      const isMacroTrendUp = ema9_1h > ema21_1h; // 1H EMA9 > EMA21
+      const isBtcSafeForTrading = btcHealth >= 2; // HARD BLOCK: BTC must be >= 2/4
 
-      const isSetupActive = currentPrice < ema25 && isOversold && rsiBendingUp && isGreenCandle;
+      // All 5 conditions must pass
+      const condition1 = currentPrice < ema25;          // Discount zone
+      const condition2 = isOversold && rsiBendingUp;    // RSI oversold recovery
+      const condition3 = isMacroTrendUp;                // 1H bullish structure
+      const condition4 = isBtcSafeForTrading;           // BTC safety gate (HARD)
+      const condition5 = isGreenCandle;                 // Buyers stepping in
 
-      const traditionalSupport = currentPrice;
-      const traditionalStopLoss = traditionalSupport * 0.985;
-      const traditionalTP1 = ema25;
-      const traditionalTP2 = traditionalSupport * 1.03;
+      const isSetupActive = condition1 && condition2 && condition3 && condition4 && condition5;
 
-      const traditionalRisk = currentPrice - traditionalStopLoss;
-      const traditionalReward = traditionalTP2 - currentPrice;
-      const traditionalRR = traditionalRisk > 0 ? (traditionalReward / traditionalRisk) : 0;
-      
-      let waitReason = "";
-      if (!isSetupActive) {
-        if (rsiVal >= 35 && currentPrice >= ema25) waitReason = " (RSI > 35 & Price > EMA25)";
-        else if (rsiVal >= 35) waitReason = " (RSI > 35)";
-        else if (currentPrice >= ema25) waitReason = " (Price > EMA25)";
+      // ── Precise SL/TP using swing levels ──
+      // SL: nearest swing low below current price (with 0.3% buffer)
+      const swingLowSL = findSwingLow(scalpCandles, currentPrice, 20);
+      // TP1: nearest swing high above current price
+      const swingHighTP1 = findSwingHigh(scalpCandles, currentPrice, 30);
+      // TP2: TP1 + 50% extension of TP1-entry distance
+      const tp1Distance = swingHighTP1 - currentPrice;
+      const swingHighTP2 = swingHighTP1 + tp1Distance * 0.5;
+
+      const tradeRisk = currentPrice - swingLowSL;
+      const tradeRewardTP1 = swingHighTP1 - currentPrice;
+      const tradeRewardTP2 = swingHighTP2 - currentPrice;
+      const rrRatioTP1 = tradeRisk > 0 ? tradeRewardTP1 / tradeRisk : 0;
+      const rrRatioTP2 = tradeRisk > 0 ? tradeRewardTP2 / tradeRisk : 0;
+
+      // Minimum R:R 1.5 required to fire
+      const hasMinRR = rrRatioTP1 >= 1.5;
+
+      // ── Confidence & Risk scores ──
+      const confidenceScore = calculateConfidenceScore({
+        rsiVal, previousRsiVal, macd, macdSignal,
+        volCurrent, volAvg, btcHealth, isVolumeSpike,
+        ema50_4h, currentPrice, pattern
+      });
+      const confidenceLabel = getConfidenceLabel(confidenceScore);
+      const riskLevel = calculateRiskLevel(rrRatioTP2, btcHealth);
+
+      // ── Reason strings for wait state ──
+      const failedConditions = [];
+      if (!condition1) failedConditions.push(`Price above EMA25 (${ema25.toFixed(4)})`);
+      if (!condition2) {
+        if (!isOversold) failedConditions.push(`RSI not oversold (${rsiVal.toFixed(1)} > 38)`);
+        if (!rsiBendingUp) failedConditions.push("RSI still falling");
       }
+      if (!condition3) failedConditions.push("1H Bearish Structure (EMA9 < EMA21)");
+      if (!condition4) failedConditions.push(`BTC too weak (Health: ${btcHealth}/4)`);
+      if (!condition5) failedConditions.push("No green candle");
+      if (isSetupActive && !hasMinRR) failedConditions.push(`R:R too low (${rrRatioTP1.toFixed(2)} < 1.5)`);
 
-      const traditionalBuyStatus = isSetupActive ? "BUY ACTIVE" : `WAITING FOR SETUP${waitReason}`;
-      const traditionalSellStatus = isSetupActive ? "WAITING SELL" : "WAITING BUY";
+      const waitReason = failedConditions.length > 0
+        ? failedConditions[0] // Show the most important blocker
+        : "";
 
+      const traditionalBuyStatus = (isSetupActive && hasMinRR) ? "BUY ACTIVE" : `WAITING${waitReason ? ` — ${waitReason}` : ""}`;
+
+      // ── Auto-fire signal ──
       let newSignalAlert = null;
-      if (isSetupActive) {
+      if (isSetupActive && hasMinRR) {
         const now = Date.now();
         const lastTime = lastSignalTimes.current[symbol] || 0;
-        if (now - lastTime > 900000) { // 15 minutes cooldown
+        if (now - lastTime > 900000) { // 15 min cooldown
           lastSignalTimes.current[symbol] = now;
           
           const autoSignal = {
@@ -236,24 +289,24 @@ export function useBinanceData(symbol, mode) {
             entryPrice: currentPrice,
             targets: {
               buyLimit: currentPrice,
-              sellTarget: traditionalTP2, // Using TP2 for max RR
-              stopLoss: traditionalStopLoss,
-              rrRatio: traditionalRR
+              tp1: swingHighTP1,
+              tp2: swingHighTP2,
+              stopLoss: swingLowSL,
+              rrRatio: rrRatioTP2,
             },
-            score: 10, // Max score for strict logic
+            confidenceScore,
+            confidenceLabel,
+            riskLevel,
+            score: confidenceScore,
             status: 'BUY ACTIVE',
-            tp1: traditionalTP1,
-            tp2: traditionalTP2
           };
           
-          // Fire and forget save to DB
           saveSignal(autoSignal).catch(e => console.error("Auto save failed", e));
-          
           newSignalAlert = autoSignal;
         }
       }
 
-      // Determine Overall AI Recommendation (Kept for historical reasons or small widgets)
+      // ── Overall AI Recommendation (Secondary widget) ──
       let aiRecommendation = { status: "NEUTRAL", reason: "Consolidating or weak volume. Avoid entries here." };
       if (score >= 6) {
         aiRecommendation = { status: "STRONG BUY", reason: "Excellent setup! Strong confluence across indicators." };
@@ -268,31 +321,38 @@ export function useBinanceData(symbol, mode) {
         aiRecommendation = { status: "NO TRADE ZONE", reason: "BTC is dumping or highly volatile. Trading paused." };
       }
 
+      // ── Traditional plan object ──
       const plans = {
         traditional: {
-          support: traditionalSupport,
-          resistance: traditionalTP2, // Max TP
-          tp1: traditionalTP1,
-          tp2: traditionalTP2,
-          stopLoss: traditionalStopLoss,
-          rrRatio: traditionalRR,
-          distanceToSupport: 0,
-          distanceToResistance: ((traditionalTP2 - currentPrice) / currentPrice * 100),
+          support: swingLowSL,
+          tp1: swingHighTP1,
+          tp2: swingHighTP2,
+          stopLoss: swingLowSL,
+          rrRatio: rrRatioTP2,
+          rrRatioTP1,
+          distanceToSupport: ((currentPrice - swingLowSL) / currentPrice * 100),
+          distanceToTP1: ((swingHighTP1 - currentPrice) / currentPrice * 100),
+          distanceToTP2: ((swingHighTP2 - currentPrice) / currentPrice * 100),
           buyStatus: traditionalBuyStatus,
-          sellStatus: traditionalSellStatus,
-          isSetupActive: isSetupActive,
+          isSetupActive: isSetupActive && hasMinRR,
           rsi: rsiVal,
-          ema25: ema25,
-          currentPrice: currentPrice,
+          ema25,
+          currentPrice,
+          confidenceScore,
+          confidenceLabel,
+          riskLevel,
           conditions: {
-            discountPrice: currentPrice < ema25,
-            oversold: isOversold,
-            rsiBendingUp: rsiBendingUp,
-            greenCandle: isGreenCandle
-          }
+            discountPrice: condition1,
+            oversold: condition2,
+            macroTrend: condition3,
+            btcSafe: condition4,
+            greenCandle: condition5,
+          },
+          failedConditions,
         }
       };
-      // Generate Analysis Log
+
+      // ── Analysis Log ──
       const analysisLog = [];
       if (checks.support) analysisLog.push("Price within 1.5% of Support Floor.");
       if (checks.ema) analysisLog.push("EMA9 crossed above EMA21 (Bullish Crossover).");
@@ -301,9 +361,10 @@ export function useBinanceData(symbol, mode) {
       if (checks.volume) analysisLog.push("Significant volume spike detected.");
       if (checks.trend) analysisLog.push("Macro Trend is Bullish (1H & 4H).");
       if (!checks.trend) analysisLog.push("Macro Trend is Bearish.");
-      if (checks.btc && btcIsSafe) analysisLog.push(`BTC Health ${btcHealth}/4 — market safe for entries.`);
+      if (checks.btc && btcIsStrong) analysisLog.push(`BTC Health ${btcHealth}/4 — market safe for entries.`);
       if (!btcIsSafe) analysisLog.push("BTC Market unsafe. Entries paused.");
 
+      // ── Chart bundles ──
       const formatCandles = (candles) => candles.map(c => ({
         time: Math.floor(c.time / 1000),
         open: c.open,
@@ -312,14 +373,12 @@ export function useBinanceData(symbol, mode) {
         close: c.close
       }));
 
-      const getChartBundle = (candles) => {
-        return {
-          candles: formatCandles(candles),
-          ema7: calculateEMAArray(candles, 7),
-          ema25: calculateEMAArray(candles, 25),
-          ema99: calculateEMAArray(candles, 99)
-        };
-      };
+      const getChartBundle = (candles) => ({
+        candles: formatCandles(candles),
+        ema7: calculateEMAArray(candles, 7),
+        ema25: calculateEMAArray(candles, 25),
+        ema99: calculateEMAArray(candles, 99)
+      });
 
       const chartData = {
         '15m': getChartBundle(candles15m),
@@ -330,13 +389,16 @@ export function useBinanceData(symbol, mode) {
       setData({
         ticker: { ...ticker, currentPrice, symbol },
         indicators: {
-          rsiVal, ema9, ema21, ema50_1h, ema50_4h, macd, signal: macdSignal, volAvg, volCurrent, pattern
+          rsiVal, ema9, ema21, ema25, ema50_1h, ema50_4h,
+          ema9_1h, ema21_1h,
+          macd, signal: macdSignal, volAvg, volCurrent, pattern
         },
         scoreData: {
           score, checks, aiRecommendation, analysisLog, plans
         },
         btcData: {
-          price: btcLivePrice, health: btcHealth, isSafe: btcIsSafe, momentumUp: isBtcMomentumUp, reason: btcReason
+          price: btcLivePrice, health: btcHealth, isSafe: btcIsSafe,
+          momentumUp: isBtcMomentumUp, reason: btcReason
         },
         chartData,
         newSignalAlert,

@@ -35,15 +35,17 @@ export function useSimulation() {
     const currentActive = JSON.parse(localStorage.getItem('sim_active') || '[]');
     if (currentActive.find(t => t.pair === signal.pair)) return;
     
+    const actualTradeSize = signal.tradeSize || tradeSize;
+
     // Not enough balance
-    if (demoBalance < tradeSize) return;
+    if (demoBalance < actualTradeSize) return;
 
     const newTrade = {
       id: Date.now().toString(),
       pair: signal.pair,
       entryPrice: signal.entryPrice,
-      qty: tradeSize / signal.entryPrice,
-      invested: tradeSize,
+      qty: actualTradeSize / signal.entryPrice,
+      invested: actualTradeSize,
       mode: signal.mode,
       tp1: signal.tp1 || signal.targets?.sellTarget,
       tp2: signal.tp2 || signal.targets?.sellTarget,
@@ -53,7 +55,7 @@ export function useSimulation() {
       currentPnl: 0
     };
 
-    const newBalance = demoBalance - tradeSize;
+    const newBalance = demoBalance - actualTradeSize;
     const newActive = [...currentActive, newTrade];
 
     setDemoBalance(newBalance);

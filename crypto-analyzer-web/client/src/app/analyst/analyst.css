@@ -1,0 +1,342 @@
+/* ══ Analyst Page Layout ══ */
+
+.analyst-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg-primary);
+}
+
+/* ── Header ── */
+.analyst-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--card-border);
+  backdrop-filter: blur(12px);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.analyst-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.analyst-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.analyst-symbol-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-secondary);
+  padding: 5px 12px;
+  border-radius: 20px;
+  border: 1px solid var(--card-border);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* ── Main body ── */
+.analyst-body {
+  display: flex;
+  flex: 1;
+  gap: 0;
+  overflow: hidden;
+  height: calc(100vh - 57px - 70px); /* header + mobile dock */
+}
+
+/* ── Sidebar ── */
+.analyst-sidebar {
+  width: 260px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--card-border);
+  background: var(--card-bg);
+  overflow: hidden;
+}
+
+.analyst-sidebar-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--card-border);
+  background: var(--bg-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.analyst-sidebar-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.analyst-history-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid var(--card-border);
+  background: var(--bg-secondary);
+  transition: all 0.2s;
+}
+
+.analyst-history-item:hover {
+  border-color: var(--neon-purple);
+}
+
+.analyst-history-item.active {
+  border-color: var(--neon-purple);
+  background: rgba(180, 90, 255, 0.07);
+}
+
+.analyst-history-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+/* ── Report area ── */
+.analyst-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.analyst-report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--card-border);
+  background: var(--bg-secondary);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.analyst-report-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 2px 0;
+}
+
+.analyst-report-date {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.analyst-report-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+/* ── Trading Plan Cards ── */
+.analyst-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.analyst-plan-card {
+  border-radius: 12px;
+  padding: 14px 10px;
+  text-align: center;
+}
+
+.analyst-plan-card-label {
+  font-size: 9px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  letter-spacing: 0.8px;
+}
+
+.analyst-plan-card-price {
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.analyst-plan-card-sub {
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* ── Report text ── */
+.analyst-text {
+  font-size: 14px;
+  line-height: 1.95;
+  color: var(--text-secondary);
+}
+
+.analyst-section-heading {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--accent-blue);
+  margin: 20px 0 8px 0;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.analyst-tp-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 6px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: rgba(0, 255, 136, 0.05);
+  flex-wrap: wrap;
+}
+
+.analyst-sl-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 6px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: rgba(255, 50, 50, 0.05);
+  flex-wrap: wrap;
+}
+
+/* ── Mobile toggle for sidebar ── */
+.analyst-mobile-toggle {
+  display: none;
+  background: var(--bg-secondary);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ═══ RESPONSIVE ═══ */
+@media (max-width: 768px) {
+  .analyst-body {
+    flex-direction: column;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .analyst-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--card-border);
+    max-height: 200px;
+  }
+
+  .analyst-sidebar.collapsed {
+    max-height: 48px;
+    overflow: hidden;
+  }
+
+  .analyst-sidebar-list {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .analyst-history-item {
+    min-width: 120px;
+    flex-shrink: 0;
+  }
+
+  .analyst-mobile-toggle {
+    display: flex;
+  }
+
+  .analyst-content {
+    overflow: visible;
+    height: auto;
+  }
+
+  .analyst-report-body {
+    overflow: visible;
+    padding: 14px;
+  }
+
+  .analyst-report-header {
+    padding: 12px 14px;
+  }
+
+  .analyst-report-title {
+    font-size: 14px;
+  }
+
+  .analyst-plan-grid {
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .analyst-plan-card {
+    padding: 10px 8px;
+  }
+
+  .analyst-plan-card-price {
+    font-size: 13px;
+  }
+
+  .analyst-text {
+    font-size: 13px;
+    line-height: 1.8;
+  }
+
+  .analyst-tp-row,
+  .analyst-sl-row {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .analyst-header {
+    padding: 10px 14px;
+  }
+
+  /* Body padding for mobile dock */
+  .analyst-page {
+    padding-bottom: 70px;
+  }
+}
+
+@media (max-width: 480px) {
+  .analyst-plan-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .analyst-header-right .analyst-symbol-chip span {
+    display: none;
+  }
+}
