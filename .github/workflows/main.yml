@@ -1,0 +1,21 @@
+name: 🚀 Deploy website on push QA API
+on:
+  push:
+    branches:
+      - server-live  # Trigger deployment on push to the main branch
+      
+jobs:
+  web-deploy:
+    name: 🎉 Deploy
+    runs-on: ubuntu-latest
+    steps:
+    - name: 🚚 Get latest code
+      uses: actions/checkout@v4
+
+    - name: 📂 Sync files
+      uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      with:        
+        server: ${{ secrets.FTP_SERVER }}
+        username: ${{ secrets.FTP_USERNAME }}
+        password: ${{ secrets.FTP_PASSWORD }}
+        local-dir: ./crypto-analyzer-web/server/  # Tells the action to only upload the contents of the server folder
