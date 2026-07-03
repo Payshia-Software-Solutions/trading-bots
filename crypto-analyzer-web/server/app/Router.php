@@ -22,6 +22,10 @@ class Router {
         $this->add('PUT', $path, $handler);
     }
 
+    public function delete($path, $handler) {
+        $this->add('DELETE', $path, $handler);
+    }
+
     public function dispatch($method, $uri) {
         // Strip trailing slash if present
         $uri = rtrim($uri, '/');

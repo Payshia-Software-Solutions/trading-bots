@@ -10,6 +10,7 @@ export default function TradingChart({ data, targets, theme = 'dark' }) {
   const ema25Ref = useRef(null);
   const ema99Ref = useRef(null);
   const projectedPathRef = useRef(null);
+  const snapshotSeriesRef = useRef([]);
 
   const [legend, setLegend] = React.useState(null);
 
@@ -162,6 +163,31 @@ export default function TradingChart({ data, targets, theme = 'dark' }) {
     if (data.ema99 && ema99Ref.current) ema99Ref.current.setData(data.ema99);
     if (projectedPathRef.current) {
       projectedPathRef.current.setData(data.projectedPath || []);
+    }
+
+    // Clean up old snapshot series
+    if (snapshotSeriesRef.current) {
+      snapshotSeriesRef.current.forEach(s => {
+        try { chartRef.current.removeSeries(s); } catch (e) {}
+      });
+      snapshotSeriesRef.current = [];
+    }
+
+    // Draw saved prediction snapshots (frozen paths)
+    if (data.snapshots && data.snapshots.length > 0 && chartRef.current) {
+      data.snapshots.forEach((snapPath, index) => {
+        const opacity = Math.max(0.2, 0.8 - index * 0.25);
+        const series = chartRef.current.addSeries(LineSeries, {
+          color: index === 0 ? '#38bdf8' : `rgba(56, 189, 248, ${opacity})`,
+          lineWidth: index === 0 ? 2 : 1.5,
+          lineStyle: 2, // Dashed line
+          crosshairMarkerVisible: false,
+          lastValueVisible: false,
+          title: index === 0 ? 'Last AI Path' : `Saved AI Path ${index + 1}`
+        });
+        series.setData(snapPath);
+        snapshotSeriesRef.current.push(series);
+      });
     }
     
     // Set initial legend to last candle

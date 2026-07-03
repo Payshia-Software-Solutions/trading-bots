@@ -31,8 +31,8 @@ class SignalController {
         
         if (!empty($data['pair']) && !empty($data['mode'])) {
             try {
-                $query = "INSERT INTO signals (pair, mode, risk_mode, current_price, buy_target, sell_target, stop_loss, rr_ratio, score, status, confidence_level, risk_level) 
-                          VALUES (:pair, :mode, :risk_mode, :current_price, :buy_target, :sell_target, :stop_loss, :rr_ratio, :score, :status, :confidence_level, :risk_level)";
+                $query = "INSERT INTO signals (pair, mode, risk_mode, current_price, buy_target, tp1, sell_target, stop_loss, rr_ratio, score, status, confidence_level, risk_level) 
+                          VALUES (:pair, :mode, :risk_mode, :current_price, :buy_target, :tp1, :sell_target, :stop_loss, :rr_ratio, :score, :status, :confidence_level, :risk_level)";
                 
                 $stmt = $this->db->prepare($query);
                 
@@ -42,6 +42,7 @@ class SignalController {
                 $stmt->bindParam(":risk_mode", $risk_mode);
                 $stmt->bindParam(":current_price", $data['current_price']);
                 $stmt->bindParam(":buy_target", $data['buy_target']);
+                $stmt->bindParam(":tp1", $data['tp1']);
                 $stmt->bindParam(":sell_target", $data['sell_target']);
                 $stmt->bindParam(":stop_loss", $data['stop_loss']);
                 $stmt->bindParam(":rr_ratio", $data['rr_ratio']);
@@ -79,10 +80,26 @@ class SignalController {
         
         if (!empty($data['id']) && !empty($data['status'])) {
             try {
-                $query = "UPDATE signals SET status = :status WHERE id = :id";
+                $inputStatus = $data['status'];
+                $isClosed = in_array($inputStatus, ['TP2 HIT', 'WON', 'LOST']);
+                
+                $timeUpdates = "";
+                $finalStatus = $inputStatus;
+
+                if ($inputStatus === 'TP1 HIT') {
+                    $timeUpdates = ", tp1_hit_at = COALESCE(tp1_hit_at, CURRENT_TIMESTAMP), tp2_hit_at = NULL";
+                    $finalStatus = 'PARTIAL WIN';
+                } else if ($inputStatus === 'TP2 HIT' || $inputStatus === 'WON') {
+                    $timeUpdates = ", tp1_hit_at = COALESCE(tp1_hit_at, CURRENT_TIMESTAMP), tp2_hit_at = COALESCE(tp2_hit_at, CURRENT_TIMESTAMP)";
+                    $finalStatus = 'WON';
+                } else if ($inputStatus === 'PENDING' || $inputStatus === 'BUY ACTIVE') {
+                    $timeUpdates = ", tp1_hit_at = NULL, tp2_hit_at = NULL";
+                }
+
+                $query = "UPDATE signals SET status = :status, closed_at = " . ($isClosed ? "CURRENT_TIMESTAMP" : "NULL") . $timeUpdates . " WHERE id = :id";
                 $stmt = $this->db->prepare($query);
                 
-                $stmt->bindParam(":status", $data['status']);
+                $stmt->bindParam(":status", $finalStatus);
                 $stmt->bindParam(":id", $data['id']);
                 
                 if ($stmt->execute()) {
@@ -99,6 +116,41 @@ class SignalController {
         } else {
             http_response_code(400);
             echo json_encode(["message" => "Incomplete data."]);
+        }
+    }
+
+    // DELETE /api/signals/delete?id={id}
+    public function destroy() {
+        header('Content-Type: application/json');
+        
+        $id = isset($_GET['id']) ? $_GET['id'] : null;
+        
+        // Also support reading from body for DELETE
+        if (!$id) {
+            $data = json_decode(file_get_contents("php://input"), true);
+            $id = isset($data['id']) ? $data['id'] : null;
+        }
+
+        if (!empty($id)) {
+            try {
+                $query = "DELETE FROM signals WHERE id = :id";
+                $stmt = $this->db->prepare($query);
+                $stmt->bindParam(":id", $id);
+                
+                if ($stmt->execute()) {
+                    http_response_code(200);
+                    echo json_encode(["message" => "Signal deleted successfully."]);
+                } else {
+                    http_response_code(503);
+                    echo json_encode(["message" => "Unable to delete signal."]);
+                }
+            } catch(PDOException $e) {
+                http_response_code(500);
+                echo json_encode(["error" => "Failed to delete signal: " . $e->getMessage()]);
+            }
+        } else {
+            http_response_code(400);
+            echo json_encode(["message" => "Incomplete data. ID is required."]);
         }
     }
 }

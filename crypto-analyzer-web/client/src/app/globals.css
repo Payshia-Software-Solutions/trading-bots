@@ -34,11 +34,11 @@ body.light {
   --bg-primary: #f8fafc; 
   --bg-secondary: #ffffff;
   --card-bg: #ffffff; 
-  --card-border: rgba(0, 0, 0, 0.05);
+  --card-border: rgba(0, 0, 0, 0.08);
   
   --text-primary: #0f172a; 
   --text-secondary: #475569; 
-  --text-muted: #94a3b8; 
+  --text-muted: #64748b; 
   
   --accent-blue: #2563eb; 
   --accent-blue-hover: #1d4ed8;
@@ -46,6 +46,9 @@ body.light {
   --color-success: #16a34a; 
   --color-danger: #dc2626; 
   --color-warning: #d97706; 
+  
+  --neon-green: #15803d; /* Darker green for light mode */
+  --neon-red: #b91c1c; /* Darker red for light mode */
   
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
@@ -357,6 +360,7 @@ body {
 /* Mode Selector */
 .mode-selector {
   display: flex;
+  flex-direction: row;
   background: var(--bg-secondary);
   border-radius: 12px;
   padding: 6px;
@@ -494,6 +498,8 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 .btc-label { font-weight: 600; display: flex; align-items: center; gap: 8px; color: var(--color-warning);}
 .btc-price { font-size: 20px; font-weight: 700; }
@@ -503,6 +509,7 @@ body {
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 /* Indicators */
@@ -699,3 +706,58 @@ body {
   }
 }
 @keyframes spin { 100% { transform: rotate(360deg); } } .spin { animation: spin 2s linear infinite; }
+
+/* Global Stat Cards & Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.stat-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100px;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Specific Net Profit Card Background Styling */
+.stat-card.net-profit-card {
+  background: linear-gradient(135deg, rgba(14, 203, 129, 0.08), rgba(14, 203, 129, 0.02));
+  border-color: rgba(14, 203, 129, 0.2);
+}
+
+.stat-card.net-profit-card.loss {
+  background: linear-gradient(135deg, rgba(246, 70, 93, 0.08), rgba(246, 70, 93, 0.02));
+  border-color: rgba(246, 70, 93, 0.2);
+}
+
+/* Light mode overrides for profit card backgrounds */
+body.light .stat-card.net-profit-card {
+  background: linear-gradient(135deg, rgba(22, 163, 74, 0.08), rgba(22, 163, 74, 0.02));
+  border-color: rgba(22, 163, 74, 0.2);
+}
+
+body.light .stat-card.net-profit-card.loss {
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.08), rgba(220, 38, 38, 0.02));
+  border-color: rgba(220, 38, 38, 0.2);
+}
+
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useBinanceData } from "../hooks/useBinanceData";
+import { useState, useEffect, useRef } from "react";
+import { useBinanceData, performCalculations } from "../hooks/useBinanceData";
 import { useSimulation } from "../hooks/useSimulation";
-import { fetchAllUSDTPairs } from "../utils/binance";
+import { fetchAllUSDTPairs, fetchTickerData, fetchKlines } from "../utils/binance";
 import { generateGeminiReport, getGeminiTradeTargets } from "../utils/gemini";
 import { t } from "../utils/translations";
 import { 
@@ -11,9 +11,21 @@ import {
   Clock, LineChart, Moon, Sun, TrendingUp, XCircle, Zap, Star, AlertTriangle, ShieldCheck, List, X, Home as HomeIcon, Settings, Sparkles, Loader
 } from "lucide-react";
 import TradingChart from "../components/TradingChart";
+import SettingsModal from "../components/SettingsModal";
 import Link from 'next/link';
+import { useAuth } from '../contexts/AuthContext';
+import { useRouter } from 'next/navigation';
+import { verifySignalWithKlines } from '../utils/signalValidator';
 
 export default function Home() {
+  const { user, loading: authLoading, logout } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, authLoading, router]);
   const [symbol, setSymbol] = useState(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -48,19 +60,32 @@ export default function Home() {
   const [activePlan, setActivePlan] = useState("traditional"); // 'traditional' | 'geminiai' | 'mytrade'
   const [myEntry, setMyEntry] = useState("");
   const [isMarketModalOpen, setIsMarketModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [coinList, setCoinList] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const [marketTab, setMarketTab] = useState("all"); // 'all' | 'fav'
   const [marketSearch, setMarketSearch] = useState("");
-  const [geminiKey, setGeminiKey] = useState("");
   const [geminiTargets, setGeminiTargets] = useState(null);
   const [isGeneratingTargets, setIsGeneratingTargets] = useState(false);
   const [geminiError, setGeminiError] = useState("");
   const [activeSignalModal, setActiveSignalModal] = useState(null);
   const [signalHistory, setSignalHistory] = useState([]);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
-  const [historyStats, setHistoryStats] = useState({ wins: 0, losses: 0, pending: 0, winRate: 0, netPnlPercent: 0 });
+  const [historyTab, setHistoryTab] = useState('all'); // 'all' | 'current'
+  const [historyStats, setHistoryStats] = useState({ wins: 0, losses: 0, pending: 0, winRate: 0, netPnlPercent: 0, netPnlUSDT: 0 });
   const [allLivePrices, setAllLivePrices] = useState({});
+  const [accuracyTarget, setAccuracyTarget] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('accuracyTarget') || 'TP2';
+    }
+    return 'TP2';
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('accuracyTarget', accuracyTarget);
+    }
+  }, [accuracyTarget]);
 
   const fetchSignals = async () => {
     try {
@@ -69,39 +94,103 @@ export default function Home() {
       if (res.ok) {
         const data = await res.json();
         setSignalHistory(data);
-        calculateStats(data);
       }
     } catch (e) {
       console.error("Failed to fetch signals:", e);
     }
   };
 
-  const calculateStats = (signals) => {
-    let w = 0, l = 0, p = 0;
+  // Automatically recalculate stats when history changes, tab switches, accuracy target or prices change
+  useEffect(() => {
+    calculateStats(signalHistory, historyTab === 'current' ? symbol : null);
+  }, [signalHistory, historyTab, symbol, accuracyTarget, allLivePrices]);
+
+  const calculateStats = (signals, filterPair = null) => {
+    const filtered = filterPair ? signals.filter(s => s.pair === filterPair) : signals;
+    let w = 0, l = 0, p = 0, o = 0;
     let netPnlPercent = 0;
+    let tp1PnlPercent = 0;
+    let tp2PnlPercent = 0;
+    const SIM_USDT = 100; // $100 simulation base
 
-    signals.forEach(s => {
+    filtered.forEach(s => {
       const entry = parseFloat(s.current_price);
-      const tp = parseFloat(s.sell_target);
+      const tp1 = parseFloat(s.tp1);
+      const tp2 = parseFloat(s.sell_target);
       const sl = parseFloat(s.stop_loss);
+      const live = allLivePrices[s.pair] ? parseFloat(allLivePrices[s.pair]) : entry;
 
-      if (s.status === 'WON') {
-        w++;
-        if (entry > 0) netPnlPercent += ((tp - entry) / entry) * 100;
+      const hasHitTp1 = s.tp1_hit_at !== null || s.status === 'PARTIAL WIN' || s.status === 'WON';
+      const hasHitTp2 = s.tp2_hit_at !== null || s.status === 'WON';
+
+      if (accuracyTarget === 'TP1') {
+        if (hasHitTp1) {
+          w++;
+          if (entry > 0 && tp1 > 0) {
+            const pnl = ((tp1 - entry) / entry) * 100;
+            netPnlPercent += pnl;
+            tp1PnlPercent += pnl;
+          }
+        } else if (s.status === 'LOST') {
+          l++;
+          if (entry > 0) {
+            const pnl = ((sl - entry) / entry) * 100;
+            netPnlPercent += pnl;
+          }
+        } else if (s.status === 'PENDING') {
+          p++;
+        } else {
+          // BUY ACTIVE (not yet hit TP1 or SL)
+          o++;
+          if (entry > 0 && live > 0) {
+            const pnl = ((live - entry) / entry) * 100;
+            netPnlPercent += pnl;
+          }
+        }
+      } else {
+        // TP2 Mode
+        if (hasHitTp2) {
+          w++;
+          if (entry > 0 && tp2 > 0) {
+            const pnl = ((tp2 - entry) / entry) * 100;
+            netPnlPercent += pnl;
+            tp2PnlPercent += pnl;
+          }
+        } else if (s.status === 'LOST') {
+          l++;
+          if (entry > 0) {
+            const pnl = ((sl - entry) / entry) * 100;
+            netPnlPercent += pnl;
+          }
+        } else if (s.status === 'PENDING') {
+          p++;
+        } else {
+          // OPEN: BUY ACTIVE or PARTIAL WIN
+          o++;
+          if (entry > 0 && live > 0) {
+            const pnl = ((live - entry) / entry) * 100;
+            netPnlPercent += pnl;
+            if (hasHitTp1 && tp1 > 0) {
+              const tp1Pnl = ((tp1 - entry) / entry) * 100;
+              tp1PnlPercent += tp1Pnl;
+            }
+          }
+        }
       }
-      else if (s.status === 'LOST') {
-        l++;
-        if (entry > 0) netPnlPercent += ((sl - entry) / entry) * 100;
-      }
-      else p++;
     });
+
     const total = w + l;
+    const netPnlUSDT = (SIM_USDT * netPnlPercent) / 100;
     setHistoryStats({
       wins: w,
       losses: l,
       pending: p,
+      open: o,
       winRate: total > 0 ? ((w / total) * 100).toFixed(1) : 0,
-      netPnlPercent: netPnlPercent.toFixed(2)
+      netPnlPercent: netPnlPercent.toFixed(2),
+      tp1PnlPercent: tp1PnlPercent.toFixed(2),
+      tp2PnlPercent: tp2PnlPercent.toFixed(2),
+      netPnlUSDT: netPnlUSDT.toFixed(2),
     });
   };
 
@@ -123,9 +212,11 @@ export default function Home() {
 
   const getSignalCurrentPrice = (sig) => {
     let current = null;
-    if (sig.status === 'WON') current = parseFloat(sig.sell_target);
-    else if (sig.status === 'LOST') current = parseFloat(sig.stop_loss);
-    else if (allLivePrices[sig.pair]) {
+    if (sig.status === 'WON' || sig.status === 'TP2 HIT') {
+      current = parseFloat(sig.sell_target);
+    } else if (sig.status === 'LOST') {
+      current = parseFloat(sig.stop_loss);
+    } else if (allLivePrices[sig.pair]) {
       current = parseFloat(allLivePrices[sig.pair]);
     }
     else if (sig.pair === symbol && data?.ticker?.currentPrice) {
@@ -153,10 +244,6 @@ export default function Home() {
     if (savedFavs) {
       try { setFavorites(JSON.parse(savedFavs)); } catch (e) {}
     }
-    const savedGemini = localStorage.getItem('geminiKey');
-    if (savedGemini) {
-      setGeminiKey(savedGemini);
-    }
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme) {
       setTheme(savedTheme);
@@ -168,28 +255,23 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    let interval;
-    if (isHistoryModalOpen) {
-      const fetchPrices = async () => {
-        try {
-          const res = await fetch('https://api.binance.com/api/v3/ticker/price');
-          if (res.ok) {
-            const data = await res.json();
-            const priceMap = {};
-            data.forEach(item => {
-              priceMap[item.symbol] = item.price;
-            });
-            setAllLivePrices(priceMap);
-          }
-        } catch(e) {}
-      };
-      fetchPrices();
-      interval = setInterval(fetchPrices, 5000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
+    const fetchPrices = async () => {
+      try {
+        const res = await fetch('https://api.binance.com/api/v3/ticker/price');
+        if (res.ok) {
+          const data = await res.json();
+          const priceMap = {};
+          data.forEach(item => {
+            priceMap[item.symbol] = item.price;
+          });
+          setAllLivePrices(priceMap);
+        }
+      } catch(e) {}
     };
-  }, [isHistoryModalOpen]);
+    fetchPrices();
+    const interval = setInterval(fetchPrices, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   const toggleFavorite = (e, coin) => {
     e.stopPropagation();
@@ -209,7 +291,10 @@ export default function Home() {
     return true;
   });
 
-  const { data, activeTrade, setActiveTrade, runAnalysis } = useBinanceData(symbol, mode, riskMode);
+  const { 
+    data, activeTrade, setActiveTrade, runAnalysis, savePredictionSnapshot, 
+    modelWeights, activePattern, resetPatternLock 
+  } = useBinanceData(symbol, mode, riskMode);
   const sim = useSimulation();
 
   useEffect(() => {
@@ -218,28 +303,57 @@ export default function Home() {
     }
   }, [data?.ticker?.currentPrice, symbol]);
 
-  // Auto-evaluate Signal History Win/Loss
+  // Auto-evaluate ALL Active Signals in the background against allLivePrices
   useEffect(() => {
-    if (!data?.ticker?.currentPrice || !signalHistory || signalHistory.length === 0) return;
-    
-    // PREVENT RACE CONDITION: Only evaluate if the fetched data matches the selected symbol
-    if (data.ticker.symbol !== symbol) return;
-
-    const currentPrice = parseFloat(data.ticker.currentPrice);
+    if (!signalHistory || signalHistory.length === 0 || !allLivePrices || Object.keys(allLivePrices).length === 0) return;
 
     signalHistory.forEach(sig => {
-      if (sig.pair === symbol && sig.status !== 'WON' && sig.status !== 'LOST') {
-        const tp = parseFloat(sig.sell_target);
+      if (sig.status !== 'WON' && sig.status !== 'LOST') {
+        const livePrice = parseFloat(allLivePrices[sig.pair]);
+        if (!livePrice) return;
+
+        const tp1 = parseFloat(sig.tp1);
+        const tp2 = parseFloat(sig.sell_target);
         const sl = parseFloat(sig.stop_loss);
-        
-        if (currentPrice >= tp) {
-          updateSignalStatus(sig.id, 'WON');
-        } else if (currentPrice <= sl) {
+
+        // Check TP2 hit (WON)
+        if (livePrice >= tp2) {
+          updateSignalStatus(sig.id, 'TP2 HIT');
+        }
+        // Check TP1 hit
+        else if (tp1 && livePrice >= tp1 && sig.status !== 'PARTIAL WIN' && sig.status !== 'TP1 HIT') {
+          updateSignalStatus(sig.id, 'TP1 HIT');
+        }
+        // Check Stop Loss hit (LOST)
+        else if (livePrice <= sl) {
           updateSignalStatus(sig.id, 'LOST');
         }
       }
     });
-  }, [data?.ticker?.currentPrice, symbol, signalHistory]);
+  }, [allLivePrices, signalHistory]);
+
+  // Secondary Background Evaluator: Check Klines (Wicks) every 60s
+  useEffect(() => {
+    if (!signalHistory || signalHistory.length === 0) return;
+
+    const validateWithKlines = () => {
+      signalHistory.forEach(sig => {
+        if (sig.status !== 'WON' && sig.status !== 'LOST') {
+          verifySignalWithKlines(sig, updateSignalStatus);
+        }
+      });
+    };
+
+    // Run once on load after a short delay to let live prices settle
+    const initialTimer = setTimeout(validateWithKlines, 5000);
+    // Run every 60 seconds
+    const interval = setInterval(validateWithKlines, 60000);
+
+    return () => {
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
+  }, [signalHistory]);
 
   useEffect(() => {
     if (data?.newSignalAlert) {
@@ -266,6 +380,99 @@ export default function Home() {
       return next;
     });
   };
+
+  // Background scanner for favorite coins list
+  const backgroundLastSignalTimes = useRef({});
+
+  useEffect(() => {
+    if (!favorites || favorites.length === 0) return;
+
+    let index = 0;
+    const scanNextFavorite = async () => {
+      const favSymbol = favorites[index];
+      index = (index + 1) % favorites.length;
+
+      // Skip scanning the active coin to avoid duplicate api requests and double triggers
+      if (favSymbol === symbol) return;
+
+      try {
+        const ticker = await fetchTickerData(favSymbol);
+        if (!ticker) return;
+
+        const candles15m = await fetchKlines(favSymbol, '15m', 200);
+        const candles1h = await fetchKlines(favSymbol, '1h', 100);
+        const candles4h = await fetchKlines(favSymbol, '4h', 100);
+        const btcCandles15m = await fetchKlines('BTCUSDT', '15m', 50);
+        const btcCandles1h = await fetchKlines('BTCUSDT', '1h', 50);
+
+        if (!candles15m || !candles1h || !candles4h || !btcCandles15m || !btcCandles1h) return;
+
+        const results = performCalculations({
+          symbol: favSymbol,
+          mode: mode, 
+          riskMode: riskMode, 
+          ticker,
+          candles15m,
+          candles1h,
+          candles4h,
+          btcCandles15m,
+          btcCandles1h
+        });
+
+        if (results.isSetupActive && results.hasMinRR) {
+          const now = Date.now();
+          const lastTime = backgroundLastSignalTimes.current[favSymbol] || 0;
+          if (now - lastTime > 900000) { // 15 min cooldown
+            backgroundLastSignalTimes.current[favSymbol] = now;
+            
+            // Save to DB
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || (typeof window !== 'undefined' ? `http://${window.location.hostname}/trading-bots/crypto-analyzer-web/server/public` : 'http://localhost/trading-bots/crypto-analyzer-web/server/public');
+            const saveRes = await fetch(`${apiUrl}/api/signals`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                pair: results.autoSignal.pair,
+                mode: results.autoSignal.mode,
+                risk_mode: results.autoSignal.riskMode,
+                current_price: results.autoSignal.entryPrice,
+                buy_target: results.autoSignal.targets.buyLimit,
+                sell_target: results.autoSignal.targets.tp2,
+                stop_loss: results.autoSignal.targets.stopLoss,
+                rr_ratio: parseFloat(results.autoSignal.targets.rrRatio),
+                score: results.autoSignal.confidenceScore,
+                status: results.autoSignal.status,
+                confidence_level: results.autoSignal.confidenceLabel,
+                risk_level: results.autoSignal.riskLevel
+              })
+            });
+
+            if (saveRes.ok) {
+              const saved = await saveRes.json();
+              const fullSignalObj = { ...results.autoSignal, id: saved.signal.id };
+              
+              // Trigger Alert Modal & Sound
+              setActiveSignalModal(fullSignalObj);
+              sim.openSimTrade(fullSignalObj);
+              try {
+                const audio = new Audio('/alert.mp3');
+                audio.play().catch(e => {});
+              } catch (e) {}
+
+              // Refresh UI history
+              fetchSignals();
+            }
+          }
+        }
+      } catch (err) {
+        console.error(`Background scan failed for ${favSymbol}:`, err);
+      }
+    };
+
+    // Scan one favorite coin every 8 seconds
+    const scannerInterval = setInterval(scanNextFavorite, 8000);
+    return () => clearInterval(scannerInterval);
+
+  }, [favorites, symbol, mode, riskMode]);
 
   useEffect(() => {
     if (data?.ticker?.currentPrice) {
@@ -374,6 +581,9 @@ export default function Home() {
       activePlanData = null; // We need to fetch
     }
   }
+  if (authLoading || !user) {
+    return <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)', zIndex: 9999 }}><Loader className="spin" size={32} /></div>;
+  }
 
   return (
     <div className="dashboard-layout">
@@ -424,34 +634,40 @@ export default function Home() {
               <CheckCircle2 size={14} /> Demo Trading
             </button>
           </Link>
+
+          <Link href="/audit">
+            <button className="btn" style={{background: 'rgba(100,100,255,0.12)', color: 'var(--accent-blue)', border: '1px solid var(--accent-blue)', fontSize: '12px'}}>
+              🔬 Audit
+            </button>
+          </Link>
           
           <div className="status-badge connected">
             <div className="pulse-dot"></div>
             {t('liveApi', lang)}
           </div>
-          <div style={{display: 'flex', alignItems: 'center', marginLeft: '12px'}}>
-            <input 
-              type="password" 
-              value={geminiKey} 
-              onChange={e => {
-                setGeminiKey(e.target.value);
-                localStorage.setItem('geminiKey', e.target.value);
-              }}
-              placeholder="Gemini API Key"
-              style={{
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--card-border)',
-                color: 'var(--text-primary)',
-                padding: '4px 8px',
-                borderRadius: '4px',
-                fontSize: '12px',
-                width: '120px'
-              }}
-            />
-          </div>
+          <button 
+            onClick={logout}
+            className="btn" 
+            style={{marginLeft: '12px', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-danger)', border: '1px solid rgba(239, 68, 68, 0.2)', fontSize: '12px'}}
+            title="Log Out"
+          >
+            Logout
+          </button>
+
+          <button 
+            onClick={() => setIsSettingsModalOpen(true)}
+            className="icon-btn" 
+            style={{marginLeft: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--card-border)'}}
+            title="System Settings"
+          >
+            <Settings size={18} />
+          </button>
         </div>
-        <div className="pulse-line"></div>
       </header>
+
+      {isSettingsModalOpen && (
+        <SettingsModal onClose={() => setIsSettingsModalOpen(false)} />
+      )}
 
       <div className="dashboard-grid" style={{ position: 'relative' }}>
         
@@ -720,12 +936,14 @@ export default function Home() {
                     <div style={{width: '100%'}}>
                       <button 
                         onClick={async () => {
-                          if (!geminiKey) return alert("Please enter your Gemini API Key in the top right corner.");
-                          setIsGeneratingTargets(true);
-                          setGeminiError("");
                           try {
-                            const timeStr = new Date().toLocaleTimeString();
-                            const tgts = await getGeminiTradeTargets(geminiKey, symbol, data, timeStr);
+                            const localGeminiKey = localStorage.getItem('gemini_api_key');
+                            if (!localGeminiKey) return alert("Please set your Gemini API Key in System Settings (top right gear icon).");
+                            
+                            setIsGeneratingTargets(true);
+                            setGeminiError(null);
+                            const timeStr = chartTimeframe;
+                            const tgts = await getGeminiTradeTargets(localGeminiKey, symbol, data, timeStr);
                             setGeminiTargets(tgts);
                           } catch(e) {
                             setGeminiError(e.message);
@@ -825,8 +1043,28 @@ export default function Home() {
                   color: 'var(--text-primary)',
                   lineHeight: '1.5'
                 }}>
-                  <h4 style={{margin: '0 0 10px 0', fontSize: '11px', fontWeight: '800', color: 'var(--accent-blue)', display: 'flex', alignItems: 'center', gap: '6px'}}>
-                    <Activity size={14} /> LIVE ALGORITHM STATUS
+                  <h4 style={{margin: '0 0 10px 0', fontSize: '11px', fontWeight: '800', color: 'var(--accent-blue)', display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'space-between'}}>
+                    <div style={{display: 'flex', alignItems: 'center', gap: '6px'}}>
+                      <Activity size={14} /> LIVE ALGORITHM STATUS
+                    </div>
+                    {activePattern && (
+                      <button 
+                        onClick={resetPatternLock} 
+                        style={{
+                          background: 'rgba(255,255,255,0.08)', 
+                          border: '1px solid var(--card-border)', 
+                          color: 'var(--text-primary)', 
+                          padding: '2px 8px', 
+                          borderRadius: '4px', 
+                          fontSize: '10px', 
+                          fontWeight: '700',
+                          cursor: 'pointer',
+                          textTransform: 'uppercase'
+                        }}
+                      >
+                        Recalculate
+                      </button>
+                    )}
                   </h4>
                   {/* Confidence + Risk Badges */}
                   {activePlanData.confidenceLabel && (
@@ -1100,33 +1338,70 @@ export default function Home() {
         {/* Right Column */}
         <div className="col">
           <div className="card glass" style={{ marginBottom: '16px' }}>
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px'}}>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px'}}>
               <h3 className="section-title" style={{margin: 0}}><Activity size={16} /> {t('signalAccuracy', lang)}</h3>
-              <div style={{fontSize: '14px', fontWeight: '800', color: historyStats.winRate >= 50 ? 'var(--color-success)' : 'var(--color-warning)'}}>
-                {historyStats.winRate}% WR
+              <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                <div style={{display: 'flex', background: 'var(--bg-secondary)', borderRadius: '6px', padding: '2px', border: '1px solid var(--card-border)'}}>
+                  <button 
+                    onClick={() => setAccuracyTarget('TP1')} 
+                    style={{
+                      background: accuracyTarget === 'TP1' ? 'var(--color-success)' : 'transparent',
+                      color: accuracyTarget === 'TP1' ? '#000' : 'var(--text-secondary)',
+                      border: 'none', padding: '2px 8px', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold'
+                    }}
+                  >TP1</button>
+                  <button 
+                    onClick={() => setAccuracyTarget('TP2')} 
+                    style={{
+                      background: accuracyTarget === 'TP2' ? 'var(--accent-blue)' : 'transparent',
+                      color: accuracyTarget === 'TP2' ? '#000' : 'var(--text-secondary)',
+                      border: 'none', padding: '2px 8px', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold'
+                    }}
+                  >TP2</button>
+                </div>
+                <div style={{fontSize: '14px', fontWeight: '800', color: historyStats.winRate >= 50 ? 'var(--color-success)' : 'var(--color-warning)'}}>
+                  {historyStats.winRate}% WR
+                </div>
               </div>
             </div>
             <div style={{display: 'flex', gap: '12px'}}>
               <div style={{flex: 1, background: 'var(--bg-secondary)', padding: '12px', borderRadius: '8px', textAlign: 'center'}}>
                 <div style={{fontSize: '24px', fontWeight: '700', color: 'var(--color-success)'}}>{historyStats.wins}</div>
-                <div style={{fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600'}}>{t('wins', lang)}</div>
+                <div style={{fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600'}}>
+                  {accuracyTarget === 'TP1' ? 'WINS (TP1)' : 'WINS (TP2)'}
+                </div>
               </div>
               <div style={{flex: 1, background: 'var(--bg-secondary)', padding: '12px', borderRadius: '8px', textAlign: 'center'}}>
                 <div style={{fontSize: '24px', fontWeight: '700', color: 'var(--color-danger)'}}>{historyStats.losses}</div>
                 <div style={{fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600'}}>{t('losses', lang)}</div>
               </div>
               <div style={{flex: 1, background: 'var(--bg-secondary)', padding: '12px', borderRadius: '8px', textAlign: 'center'}}>
+                <div style={{fontSize: '24px', fontWeight: '700', color: 'var(--color-warning)'}}>{historyStats.open || 0}</div>
+                <div style={{fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600'}}>
+                  {accuracyTarget === 'TP1' ? 'OPEN (Active)' : 'OPEN'}
+                </div>
+              </div>
+              <div style={{flex: 1, background: 'var(--bg-secondary)', padding: '12px', borderRadius: '8px', textAlign: 'center'}}>
                 <div style={{fontSize: '24px', fontWeight: '700', color: 'var(--accent-blue)'}}>{historyStats.pending}</div>
                 <div style={{fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600'}}>{t('pending', lang)}</div>
               </div>
             </div>
-            <button 
-              className="btn primary-btn" 
-              style={{width: '100%', marginTop: '12px', padding: '8px', fontSize: '12px'}}
-              onClick={() => setIsHistoryModalOpen(true)}
-            >
-              <List size={14} style={{marginRight: '6px'}} /> View Signal History
-            </button>
+            <div style={{display: 'flex', gap: '8px', marginTop: '12px'}}>
+              <button 
+                className="btn secondary-btn" 
+                style={{flex: 1, padding: '8px', fontSize: '12px'}}
+                onClick={() => setIsHistoryModalOpen(true)}
+              >
+                <List size={14} style={{marginRight: '6px'}} /> Quick History
+              </button>
+              <Link 
+                href={`/history?coin=${symbol}`}
+                className="btn primary-btn"
+                style={{flex: 1, padding: '8px', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent-blue)', color: '#000'}}
+              >
+                <LineChart size={14} style={{marginRight: '6px'}} /> Full Dashboard
+              </Link>
+            </div>
           </div>
 
           <div className="card btc-card glass">
@@ -1299,104 +1574,270 @@ export default function Home() {
       {isHistoryModalOpen && (
         <div className="modal-overlay" onClick={() => setIsHistoryModalOpen(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '800px', width: '90%'}}>
-            <div className="modal-header">
-              <h3 className="section-title" style={{margin: 0}}><Activity size={18} /> Signal History & Accuracy Monitor</h3>
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <h3 className="section-title" style={{margin: 0}}><Activity size={18} /> Signal History & Accuracy Monitor</h3>
+                <Link 
+                  href={`/history?coin=${symbol}`}
+                  style={{ fontSize: '11px', color: 'var(--accent-blue)', textDecoration: 'underline', display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '8px', fontWeight: 'bold' }}
+                >
+                  <LineChart size={12} /> Open Full View
+                </Link>
+              </div>
               <button className="icon-btn" style={{width: '32px', height: '32px'}} onClick={() => setIsHistoryModalOpen(false)}>
                 <X size={18} />
               </button>
             </div>
             <div className="modal-body" style={{padding: '16px'}}>
-              <div style={{display: 'flex', gap: '16px', marginBottom: '20px'}}>
-                <div style={{flex: 1, background: 'var(--bg-secondary)', padding: '16px', borderRadius: '8px', textAlign: 'center'}}>
-                  <div style={{fontSize: '32px', fontWeight: '800', color: historyStats.winRate >= 50 ? 'var(--color-success)' : 'var(--color-warning)'}}>{historyStats.winRate}%</div>
-                  <div style={{fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600', marginTop: '4px'}}>OVERALL WIN RATE</div>
+              {/* Tab Filters and Target Selector */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid var(--card-border)', paddingBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => setHistoryTab('all')}
+                    style={{
+                      background: historyTab === 'all' ? 'var(--accent-blue)' : 'transparent',
+                      color: historyTab === 'all' ? '#000' : 'var(--text-primary)',
+                      border: '1px solid var(--accent-blue)',
+                      padding: '6px 16px',
+                      borderRadius: '20px',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    All Coins
+                  </button>
+                  <button
+                    onClick={() => setHistoryTab('current')}
+                    style={{
+                      background: historyTab === 'current' ? 'var(--accent-blue)' : 'transparent',
+                      color: historyTab === 'current' ? '#000' : 'var(--text-primary)',
+                      border: '1px solid var(--accent-blue)',
+                      padding: '6px 16px',
+                      borderRadius: '20px',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    Current Coin ({symbol})
+                  </button>
                 </div>
-                <div style={{flex: 2, display: 'flex', gap: '12px'}}>
-                  <div style={{flex: 1, background: 'var(--bg-secondary)', padding: '12px', borderRadius: '8px', textAlign: 'center', display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
-                    <div style={{fontSize: '20px', fontWeight: '700', color: 'var(--color-success)'}}>{historyStats.wins}</div>
-                    <div style={{fontSize: '11px', color: 'var(--text-muted)', fontWeight: '600'}}>WINS</div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 'bold' }}>TARGET GOAL:</span>
+                  <div style={{ display: 'flex', background: 'var(--bg-secondary)', borderRadius: '6px', padding: '2px', border: '1px solid var(--card-border)' }}>
+                    <button
+                      onClick={() => setAccuracyTarget('TP1')}
+                      style={{
+                        background: accuracyTarget === 'TP1' ? 'var(--color-success)' : 'transparent',
+                        color: accuracyTarget === 'TP1' ? '#000' : 'var(--text-secondary)',
+                        border: 'none', padding: '4px 10px', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold'
+                      }}
+                    >TP1 Target</button>
+                    <button
+                      onClick={() => setAccuracyTarget('TP2')}
+                      style={{
+                        background: accuracyTarget === 'TP2' ? 'var(--accent-blue)' : 'transparent',
+                        color: accuracyTarget === 'TP2' ? '#000' : 'var(--text-secondary)',
+                        border: 'none', padding: '4px 10px', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold'
+                      }}
+                    >TP2 Target</button>
                   </div>
-                  <div style={{flex: 1, background: 'var(--bg-secondary)', padding: '16px', borderRadius: '8px', textAlign: 'center'}}>
-                  <div style={{fontSize: '24px', fontWeight: '800', color: 'var(--color-danger)'}}>{historyStats.losses}</div>
-                  <div style={{fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600', marginTop: '4px'}}>LOSSES</div>
                 </div>
-                <div style={{flex: 1, background: 'var(--bg-secondary)', padding: '16px', borderRadius: '8px', textAlign: 'center'}}>
-                  <div style={{fontSize: '24px', fontWeight: '800', color: 'var(--accent-blue)'}}>{historyStats.pending}</div>
-                  <div style={{fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600', marginTop: '4px'}}>PENDING</div>
+              </div>
+
+              <div className="stats-grid" style={{ marginBottom: '20px', gap: '12px' }}>
+                <div className="stat-card">
+                  <div style={{fontSize: '26px', fontWeight: '900', color: historyStats.winRate >= 50 ? 'var(--color-success)' : 'var(--color-warning)'}}>{historyStats.winRate}%</div>
+                  <div style={{fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700', marginTop: '4px'}}>OVERALL WIN RATE</div>
                 </div>
-                <div style={{flex: 1.2, background: 'var(--bg-secondary)', padding: '16px', borderRadius: '8px', textAlign: 'center'}}>
-                  <div style={{fontSize: '24px', fontWeight: '800', color: historyStats.netPnlPercent >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'}}>
+                <div className="stat-card">
+                  <div style={{fontSize: '22px', fontWeight: '800', color: 'var(--color-success)'}}>{historyStats.wins}</div>
+                  <div style={{fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700', marginTop: '4px'}}>
+                    {accuracyTarget === 'TP1' ? 'WINS (TP1)' : 'WINS (TP2)'}
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div style={{fontSize: '22px', fontWeight: '800', color: 'var(--color-danger)'}}>{historyStats.losses}</div>
+                  <div style={{fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700', marginTop: '4px'}}>LOSSES</div>
+                </div>
+                <div className="stat-card">
+                  <div style={{fontSize: '22px', fontWeight: '800', color: 'var(--color-warning)'}}>{historyStats.open || 0}</div>
+                  <div style={{fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700', marginTop: '4px'}}>
+                    {accuracyTarget === 'TP1' ? 'OPEN (Active)' : 'OPEN'}
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div style={{fontSize: '22px', fontWeight: '800', color: 'var(--accent-blue)'}}>{historyStats.pending}</div>
+                  <div style={{fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700', marginTop: '4px'}}>PENDING</div>
+                </div>
+                <div className={`stat-card net-profit-card ${historyStats.netPnlPercent >= 0 ? '' : 'loss'}`}>
+                  <div style={{ fontSize: '20px', fontWeight: '900', color: historyStats.netPnlPercent >= 0 ? 'var(--neon-green)' : 'var(--neon-red)', lineHeight: '1.2' }}>
                     {historyStats.netPnlPercent >= 0 ? '+' : ''}{historyStats.netPnlPercent}%
+                    <span style={{ fontSize: '12px', marginLeft: '6px', opacity: 0.8, fontWeight: '700' }}>
+                      ({historyStats.netPnlUSDT >= 0 ? '+' : ''}{historyStats.netPnlUSDT} USDT)
+                    </span>
                   </div>
-                  <div style={{fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600', marginTop: '4px'}}>NET P&L (CLOSED)</div>
-                </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700', marginTop: '6px' }}>
+                    NET PROFIT/LOSS
+                  </div>
+                  <div style={{ fontSize: '9px', color: 'var(--text-muted)', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '6px', marginTop: '6px', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>{accuracyTarget} Wins: <strong style={{ color: 'var(--neon-green)' }}>{accuracyTarget === 'TP1' ? historyStats.tp1PnlPercent : historyStats.tp2PnlPercent}%</strong></span>
+                    <span>$100/trade</span>
+                  </div>
                 </div>
               </div>
               
               <div style={{overflowY: 'auto', maxHeight: '50vh', paddingRight: '8px'}}>
-                {signalHistory.length === 0 ? (
-                  <div style={{textAlign: 'center', color: 'var(--text-muted)', padding: '40px 0'}}>
-                    No signal history found.
-                  </div>
-                ) : (
-                  <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
-                    {signalHistory.map(sig => (
-                      <div key={sig.id} style={{background: 'var(--bg-secondary)', borderRadius: '8px', padding: '12px', borderLeft: `4px solid ${sig.status === 'WON' ? 'var(--color-success)' : sig.status === 'LOST' ? 'var(--color-danger)' : 'var(--accent-blue)'}`}}>
-                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
-                          <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
-                            <strong style={{fontSize: '16px', color: 'var(--text-primary)'}}>{sig.pair}</strong>
-                            <span style={{background: 'var(--bg-primary)', padding: '2px 8px', borderRadius: '12px', fontSize: '10px', textTransform: 'uppercase', color: 'var(--text-muted)'}}>{sig.mode}</span>
-                          </div>
-                          <div style={{fontSize: '11px', color: 'var(--text-muted)'}}>
-                            {new Date(sig.created_at).toLocaleString()}
-                          </div>
-                        </div>
-                        
-                        <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '12px', flexWrap: 'wrap', gap: '8px'}}>
-                          <div><span style={{color: 'var(--text-muted)'}}>Entry:</span> <strong style={{color: 'var(--text-primary)'}}>${parseFloat(sig.current_price).toFixed(4)}</strong></div>
-                          {getSignalCurrentPrice(sig) !== null && (
-                            <div><span style={{color: 'var(--text-muted)'}}>Live:</span> <strong style={{color: 'var(--accent-blue)'}}>${getSignalCurrentPrice(sig).toFixed(4)}</strong></div>
-                          )}
-                          <div><span style={{color: 'var(--text-muted)'}}>Target:</span> <strong style={{color: 'var(--color-success)'}}>${parseFloat(sig.sell_target).toFixed(4)}</strong></div>
-                          <div><span style={{color: 'var(--text-muted)'}}>Stop:</span> <strong style={{color: 'var(--color-danger)'}}>${parseFloat(sig.stop_loss).toFixed(4)}</strong></div>
-                          <div><span style={{color: 'var(--text-muted)'}}>RR:</span> <strong style={{color: 'var(--color-warning)'}}>1:{parseFloat(sig.rr_ratio).toFixed(2)}</strong></div>
-                        </div>
-                        
-                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--card-border)', paddingTop: '8px'}}>
-                          <div style={{fontSize: '11px', fontWeight: 'bold', color: sig.status === 'WON' ? 'var(--color-success)' : sig.status === 'LOST' ? 'var(--color-danger)' : 'var(--accent-blue)'}}>
-                            STATUS: {sig.status} 
-                            {getSignalPnL(sig) !== null && (
-                              <span style={{marginLeft: '8px', color: getSignalPnL(sig) >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'}}>
-                                ({getSignalPnL(sig) >= 0 ? '+' : ''}{getSignalPnL(sig).toFixed(2)}%)
-                              </span>
-                            )}
-                          </div>
-                          
-                          <div style={{display: 'flex', gap: '8px'}}>
-                            <button 
-                              onClick={() => updateSignalStatus(sig.id, 'WON')}
-                              style={{background: sig.status === 'WON' ? 'var(--color-success)' : 'transparent', color: sig.status === 'WON' ? '#000' : 'var(--color-success)', border: '1px solid var(--color-success)', padding: '4px 12px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold'}}
-                            >
-                              WON
-                            </button>
-                            <button 
-                              onClick={() => updateSignalStatus(sig.id, 'LOST')}
-                              style={{background: sig.status === 'LOST' ? 'var(--color-danger)' : 'transparent', color: sig.status === 'LOST' ? '#000' : 'var(--color-danger)', border: '1px solid var(--color-danger)', padding: '4px 12px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold'}}
-                            >
-                              LOST
-                            </button>
-                            <button 
-                              onClick={() => updateSignalStatus(sig.id, 'PENDING')}
-                              style={{background: sig.status === 'PENDING' ? 'var(--accent-blue)' : 'transparent', color: sig.status === 'PENDING' ? '#000' : 'var(--accent-blue)', border: '1px solid var(--accent-blue)', padding: '4px 12px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold'}}
-                            >
-                              PENDING
-                            </button>
-                          </div>
-                        </div>
+                {(() => {
+                  const filtered = historyTab === 'current' 
+                    ? signalHistory.filter(s => s.pair === symbol)
+                    : signalHistory;
+                  
+                  if (filtered.length === 0) {
+                    return (
+                      <div style={{textAlign: 'center', color: 'var(--text-muted)', padding: '40px 0'}}>
+                        No signal history found for this view.
                       </div>
-                    ))}
-                  </div>
-                )}
+                    );
+                  }
+
+                  return (
+                    <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+                      {filtered.map(sig => {
+                        const pnlPct = getSignalPnL(sig);
+                        const isWon = sig.status === 'WON' || sig.status === 'PARTIAL WIN' || sig.status === 'TP1 HIT' || sig.status === 'TP2 HIT';
+                        const isLost = sig.status === 'LOST';
+                        // Compute P&L on a $100 simulation basis
+                        const simulatedProfit = pnlPct !== null ? (100 * pnlPct) / 100 : 0;
+                        
+                        return (
+                          <div key={sig.id} style={{background: 'var(--bg-secondary)', borderRadius: '8px', padding: '12px', borderLeft: `4px solid ${isWon ? 'var(--color-success)' : isLost ? 'var(--color-danger)' : 'var(--accent-blue)'}`}}>
+                            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
+                              <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                                <strong style={{fontSize: '16px', color: 'var(--text-primary)'}}>{sig.pair}</strong>
+                                <span style={{background: 'var(--bg-primary)', padding: '2px 8px', borderRadius: '12px', fontSize: '10px', textTransform: 'uppercase', color: 'var(--text-muted)'}}>{sig.mode}</span>
+                              </div>
+                              <div style={{fontSize: '11px', color: 'var(--text-muted)', textAlign: 'right'}}>
+                                <div><span style={{opacity: 0.6}}>Open:</span> {new Date(sig.created_at).toLocaleString()}</div>
+                                {sig.tp1_hit_at && (
+                                  <div><span style={{opacity: 0.6}}>TP1 Hit:</span> <span style={{color: 'var(--color-success)'}}>{new Date(sig.tp1_hit_at).toLocaleString()}</span></div>
+                                )}
+                                {sig.tp2_hit_at && (
+                                  <div><span style={{opacity: 0.6}}>TP2 Hit:</span> <span style={{color: 'var(--color-success)'}}>{new Date(sig.tp2_hit_at).toLocaleString()}</span></div>
+                                )}
+                                {sig.closed_at && !sig.tp1_hit_at && !sig.tp2_hit_at && (
+                                  <div><span style={{opacity: 0.6}}>Closed:</span> <span style={{color: isWon ? 'var(--color-success)' : isLost ? 'var(--color-danger)' : 'var(--text-muted)'}}>{new Date(sig.closed_at).toLocaleString()}</span></div>
+                                )}
+                                {sig.closed_at && isLost && (
+                                  <div><span style={{opacity: 0.6}}>Stopped:</span> <span style={{color: 'var(--color-danger)'}}>{new Date(sig.closed_at).toLocaleString()}</span></div>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '12px', flexWrap: 'wrap', gap: '8px'}}>
+                              <div><span style={{color: 'var(--text-muted)'}}>Entry:</span> <strong style={{color: 'var(--text-primary)'}}>${parseFloat(sig.current_price).toFixed(4)}</strong></div>
+                              {getSignalCurrentPrice(sig) !== null && (
+                                <div><span style={{color: 'var(--text-muted)'}}>Live:</span> <strong style={{color: 'var(--accent-blue)'}}>${getSignalCurrentPrice(sig).toFixed(4)}</strong></div>
+                              )}
+                              {sig.tp1 && (() => {
+                                const isTp1Hit = sig.status === 'PARTIAL WIN' || sig.status === 'TP1 HIT' || sig.status === 'TP2 HIT' || sig.status === 'WON' || (getSignalCurrentPrice(sig) >= parseFloat(sig.tp1));
+                                return (
+                                  <div>
+                                    <span style={{color: 'var(--text-muted)'}}>TP1:</span>{' '}
+                                    <strong style={{color: isTp1Hit ? 'var(--color-success)' : 'var(--text-primary)', opacity: isTp1Hit ? 1 : 0.6}}>
+                                      ${parseFloat(sig.tp1).toFixed(4)}
+                                      {isTp1Hit && <span style={{fontSize: '9px', marginLeft: '2px'}}>✅</span>}
+                                    </strong>
+                                  </div>
+                                );
+                              })()}
+                              {(() => {
+                                const isTp2Hit = sig.status === 'TP2 HIT' || sig.status === 'WON' || (getSignalCurrentPrice(sig) >= parseFloat(sig.sell_target));
+                                return (
+                                  <div>
+                                    <span style={{color: 'var(--text-muted)'}}>TP2:</span>{' '}
+                                    <strong style={{color: isTp2Hit ? 'var(--color-success)' : 'var(--text-primary)', opacity: isTp2Hit ? 1 : 0.6}}>
+                                      ${parseFloat(sig.sell_target).toFixed(4)}
+                                      {isTp2Hit && <span style={{fontSize: '9px', marginLeft: '2px'}}>✅</span>}
+                                    </strong>
+                                  </div>
+                                );
+                              })()}
+                              <div><span style={{color: 'var(--text-muted)'}}>Stop:</span> <strong style={{color: 'var(--color-danger)'}}>${parseFloat(sig.stop_loss).toFixed(4)}</strong></div>
+                              <div><span style={{color: 'var(--text-muted)'}}>RR:</span> <strong style={{color: 'var(--color-warning)'}}>1:{parseFloat(sig.rr_ratio).toFixed(2)}</strong></div>
+                            </div>
+                            
+                            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--card-border)', paddingTop: '8px'}}>
+                              <div style={{fontSize: '11px', fontWeight: 'bold', color: isWon ? 'var(--color-success)' : isLost ? 'var(--color-danger)' : 'var(--accent-blue)'}}>
+                                STATUS: {sig.status} 
+                                {pnlPct !== null && (
+                                  <span style={{marginLeft: '8px', color: pnlPct >= 0 ? 'var(--neon-green)' : 'var(--neon-red)'}}>
+                                    ({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}% | {pnlPct >= 0 ? '+' : ''}{simulatedProfit.toFixed(2)} USDT)
+                                  </span>
+                                )}
+                              </div>
+                              
+                              <div style={{display: 'flex', gap: '6px'}}>
+                                <button 
+                                   onClick={() => {
+                                     if (sig.status === 'PARTIAL WIN' || sig.status === 'TP1 HIT') {
+                                       updateSignalStatus(sig.id, 'PENDING');
+                                     } else {
+                                       updateSignalStatus(sig.id, 'TP1 HIT');
+                                     }
+                                   }}
+                                   style={{background: (sig.status === 'PARTIAL WIN' || sig.status === 'TP1 HIT' || sig.status === 'WON' || sig.status === 'TP2 HIT') ? 'var(--color-success)' : 'transparent', color: (sig.status === 'PARTIAL WIN' || sig.status === 'TP1 HIT' || sig.status === 'WON' || sig.status === 'TP2 HIT') ? '#000' : 'var(--color-success)', border: '1px solid var(--color-success)', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold'}}
+                                 >
+                                   TP1 HIT
+                                 </button>
+                                 <button 
+                                   onClick={() => {
+                                     if (sig.status === 'WON' || sig.status === 'TP2 HIT') {
+                                       updateSignalStatus(sig.id, 'TP1 HIT');
+                                     } else {
+                                       updateSignalStatus(sig.id, 'TP2 HIT');
+                                     }
+                                   }}
+                                   style={{background: (sig.status === 'TP2 HIT' || sig.status === 'WON') ? 'var(--accent-blue)' : 'transparent', color: (sig.status === 'TP2 HIT' || sig.status === 'WON') ? '#000' : 'var(--accent-blue)', border: '1px solid var(--accent-blue)', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold'}}
+                                 >
+                                   TP2 HIT
+                                 </button>
+                                 <button 
+                                   onClick={() => {
+                                     if (sig.status === 'LOST') {
+                                       updateSignalStatus(sig.id, 'PENDING');
+                                     } else {
+                                       updateSignalStatus(sig.id, 'LOST');
+                                     }
+                                   }}
+                                   style={{background: isLost ? 'var(--color-danger)' : 'transparent', color: isLost ? '#000' : 'var(--color-danger)', border: '1px solid var(--color-danger)', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold'}}
+                                 >
+                                   LOST
+                                 </button>
+                                <button 
+                                  onClick={() => updateSignalStatus(sig.id, 'PENDING')}
+                                  style={{background: sig.status === 'PENDING' ? 'rgba(255,255,255,0.08)' : 'transparent', color: sig.status === 'PENDING' ? '#fff' : 'var(--text-muted)', border: '1px solid var(--card-border)', padding: '4px 8px', borderRadius: '4px', fontSize: '10px', cursor: 'pointer', fontWeight: 'bold'}}
+                                >
+                                  PENDING
+                                </button>
+                                <button 
+                                  onClick={() => setActiveSignalModal(sig)}
+                                  style={{background: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--text-muted)', padding: '4px 12px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer', fontWeight: 'bold'}}
+                                >
+                                  VIEW
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -1404,57 +1845,66 @@ export default function Home() {
       )}
 
       {/* Auto-Trigger Signal Modal */}
-      {activeSignalModal && (
-        <div className="modal-overlay" style={{zIndex: 9999}} onClick={() => setActiveSignalModal(null)}>
-          <div className="modal-content glass" onClick={e => e.stopPropagation()} style={{maxWidth: '400px', width: '90%', border: '2px solid var(--neon-green)', background: 'var(--bg-primary)', padding: 0}}>
-            <div className="modal-header" style={{background: 'var(--neon-green)', color: '#000', padding: '16px', borderRadius: '8px 8px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-              <h3 style={{margin: 0, fontSize: '16px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px'}}>
-                <Activity size={20} /> NEW BUY SIGNAL DETECTED!
-              </h3>
-              <button className="icon-btn" style={{width: '28px', height: '28px', color: '#000'}} onClick={() => setActiveSignalModal(null)}>
-                <X size={18} />
-              </button>
-            </div>
-            <div className="modal-body" style={{padding: '24px'}}>
-              <div style={{textAlign: 'center', marginBottom: '20px'}}>
-                <div style={{fontSize: '36px', fontWeight: '900', color: 'var(--text-primary)'}}>{activeSignalModal.pair}</div>
-                <div style={{fontSize: '14px', color: 'var(--color-success)', fontWeight: '700', marginTop: '4px'}}>Traditional Mode Setup Active</div>
-              </div>
-              
-              <div style={{display: 'flex', flexDirection: 'column', gap: '12px', background: 'var(--bg-secondary)', padding: '20px', borderRadius: '12px'}}>
-                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                  <span style={{color: 'var(--text-muted)', fontWeight: '600'}}>Entry Price:</span>
-                  <strong style={{color: 'var(--text-primary)', fontSize: '18px'}}>${activeSignalModal.entryPrice?.toFixed(4)}</strong>
-                </div>
-                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                  <span style={{color: 'var(--text-muted)', fontWeight: '600'}}>TP1 (Safe):</span>
-                  <strong style={{color: 'var(--color-success)', fontSize: '18px'}}>${(activeSignalModal.tp1 || activeSignalModal.targets?.sellTarget)?.toFixed(4)}</strong>
-                </div>
-                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                  <span style={{color: 'var(--text-muted)', fontWeight: '600'}}>TP2 (Max):</span>
-                  <strong style={{color: 'var(--color-success)', fontSize: '18px'}}>${(activeSignalModal.tp2 || activeSignalModal.targets?.sellTarget)?.toFixed(4)}</strong>
-                </div>
-                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--card-border)', paddingTop: '12px'}}>
-                  <span style={{color: 'var(--text-muted)', fontWeight: '600'}}>Stop Loss:</span>
-                  <strong style={{color: 'var(--color-danger)', fontSize: '18px'}}>${activeSignalModal.targets?.stopLoss?.toFixed(4)}</strong>
-                </div>
-              </div>
+      {activeSignalModal && (() => {
+        const entry = activeSignalModal.entryPrice || activeSignalModal.current_price || activeSignalModal.buy_target;
+        const tp1 = activeSignalModal.tp1 || activeSignalModal.targets?.tp1;
+        const tp2 = activeSignalModal.tp2 || activeSignalModal.sell_target || activeSignalModal.targets?.tp2 || activeSignalModal.targets?.sellTarget;
+        const sl = activeSignalModal.stop_loss || activeSignalModal.targets?.stopLoss;
 
-              <div style={{marginTop: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', fontWeight: '600'}}>
-                ✅ This signal has been automatically saved to your Database.
+        return (
+          <div className="modal-overlay" style={{zIndex: 9999}} onClick={() => setActiveSignalModal(null)}>
+            <div className="modal-content glass" onClick={e => e.stopPropagation()} style={{maxWidth: '400px', width: '90%', border: '2px solid var(--neon-green)', background: 'var(--bg-primary)', padding: 0}}>
+              <div className="modal-header" style={{background: 'var(--neon-green)', color: '#000', padding: '16px', borderRadius: '8px 8px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                <h3 style={{margin: 0, fontSize: '16px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px'}}>
+                  <Activity size={20} /> NEW BUY SIGNAL DETECTED!
+                </h3>
+                <button className="icon-btn" style={{width: '28px', height: '28px', color: '#000'}} onClick={() => setActiveSignalModal(null)}>
+                  <X size={18} />
+                </button>
               </div>
+              <div className="modal-body" style={{padding: '24px'}}>
+                <div style={{textAlign: 'center', marginBottom: '20px'}}>
+                  <div style={{fontSize: '36px', fontWeight: '900', color: 'var(--text-primary)'}}>{activeSignalModal.pair}</div>
+                  <div style={{fontSize: '14px', color: 'var(--color-success)', fontWeight: '700', marginTop: '4px'}}>Traditional Mode Setup Active</div>
+                </div>
+                
+                <div style={{display: 'flex', flexDirection: 'column', gap: '12px', background: 'var(--bg-secondary)', padding: '20px', borderRadius: '12px'}}>
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                    <span style={{color: 'var(--text-muted)', fontWeight: '600'}}>Entry Price:</span>
+                    <strong style={{color: 'var(--text-primary)', fontSize: '18px'}}>${parseFloat(entry || 0).toFixed(4)}</strong>
+                  </div>
+                  {tp1 && (
+                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                      <span style={{color: 'var(--text-muted)', fontWeight: '600'}}>TP1 (Safe):</span>
+                      <strong style={{color: 'var(--color-success)', fontSize: '18px'}}>${parseFloat(tp1).toFixed(4)}</strong>
+                    </div>
+                  )}
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                    <span style={{color: 'var(--text-muted)', fontWeight: '600'}}>TP2 (Max):</span>
+                    <strong style={{color: 'var(--color-success)', fontSize: '18px'}}>${parseFloat(tp2 || 0).toFixed(4)}</strong>
+                  </div>
+                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--card-border)', paddingTop: '12px'}}>
+                    <span style={{color: 'var(--text-muted)', fontWeight: '600'}}>Stop Loss:</span>
+                    <strong style={{color: 'var(--color-danger)', fontSize: '18px'}}>${parseFloat(sl || 0).toFixed(4)}</strong>
+                  </div>
+                </div>
 
-              <button 
-                className="btn primary-btn" 
-                style={{width: '100%', marginTop: '20px', padding: '14px', fontSize: '16px', background: 'var(--neon-green)', color: '#000', fontWeight: '800'}}
-                onClick={() => setActiveSignalModal(null)}
-              >
-                ACKNOWLEDGE
-              </button>
+                <div style={{marginTop: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px', fontWeight: '600'}}>
+                  ✅ This signal has been automatically saved to your Database.
+                </div>
+
+                <button 
+                  className="btn primary-btn" 
+                  style={{width: '100%', marginTop: '20px', padding: '14px', fontSize: '16px', background: 'var(--neon-green)', color: '#000', fontWeight: '800'}}
+                  onClick={() => setActiveSignalModal(null)}
+                >
+                  ACKNOWLEDGE
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Mobile Dock Menu */}
       <nav className="mobile-dock">
@@ -1475,6 +1925,12 @@ export default function Home() {
             <Sparkles size={20} />
           </div>
           <span>Analyst</span>
+        </Link>
+        <Link href="/audit" className="dock-item">
+          <div className="dock-icon-wrapper" style={{ color: 'var(--accent-blue)' }}>
+            <Activity size={20} />
+          </div>
+          <span>Audit</span>
         </Link>
         <button className="dock-item" onClick={toggleTheme}>
           <div className="dock-icon-wrapper">

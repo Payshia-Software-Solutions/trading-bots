@@ -26,10 +26,16 @@ export const viewport = {
   themeColor: "#0f172a",
 };
 
+import Providers from './Providers';
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en" className={outfit.variable}>
-      <body className="dark">{children}</body>
+      <body className="dark">
+        <Providers>
+          {children}
+        </Providers>
+      </body>
     </html>
   );
 }
