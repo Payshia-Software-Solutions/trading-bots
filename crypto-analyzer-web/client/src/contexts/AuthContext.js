@@ -12,8 +12,12 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   
-  // Update this to your PHP server URL if not proxying
-  const API_URL = "http://localhost/trading-bots/crypto-analyzer-web/server/public/api";
+  // Use env variable or dynamically determine host for local network access (e.g., from mobile)
+  const API_URL = process.env.NEXT_PUBLIC_API_URL 
+    ? `${process.env.NEXT_PUBLIC_API_URL}/api`
+    : (typeof window !== 'undefined' 
+        ? `http://${window.location.hostname}/trading-bots/crypto-analyzer-web/server/public/api` 
+        : 'http://localhost/trading-bots/crypto-analyzer-web/server/public/api');
 
   useEffect(() => {
     checkUser();
