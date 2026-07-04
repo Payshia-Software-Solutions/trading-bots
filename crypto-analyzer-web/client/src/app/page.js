@@ -15,7 +15,7 @@ import SettingsModal from "../components/SettingsModal";
 import Link from 'next/link';
 import { useAuth } from '../contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import { verifySignalWithKlines } from '../utils/signalValidator';
+import { verifySignalWithKlines, parseDateUTC } from '../utils/signalValidator';
 
 export default function Home() {
   const { user, loading: authLoading, logout } = useAuth();
@@ -1722,18 +1722,18 @@ export default function Home() {
                                 <span style={{background: 'var(--bg-primary)', padding: '2px 8px', borderRadius: '12px', fontSize: '10px', textTransform: 'uppercase', color: 'var(--text-muted)'}}>{sig.mode}</span>
                               </div>
                               <div style={{fontSize: '11px', color: 'var(--text-muted)', textAlign: 'right'}}>
-                                <div><span style={{opacity: 0.6}}>Open:</span> {new Date(sig.created_at).toLocaleString()}</div>
+                                <div><span style={{opacity: 0.6}}>Open:</span> {parseDateUTC(sig.created_at).toLocaleString()}</div>
                                 {sig.tp1_hit_at && (
-                                  <div><span style={{opacity: 0.6}}>TP1 Hit:</span> <span style={{color: 'var(--color-success)'}}>{new Date(sig.tp1_hit_at).toLocaleString()}</span></div>
+                                  <div><span style={{opacity: 0.6}}>TP1 Hit:</span> <span style={{color: 'var(--color-success)'}}>{parseDateUTC(sig.tp1_hit_at).toLocaleString()}</span></div>
                                 )}
                                 {sig.tp2_hit_at && (
-                                  <div><span style={{opacity: 0.6}}>TP2 Hit:</span> <span style={{color: 'var(--color-success)'}}>{new Date(sig.tp2_hit_at).toLocaleString()}</span></div>
+                                  <div><span style={{opacity: 0.6}}>TP2 Hit:</span> <span style={{color: 'var(--color-success)'}}>{parseDateUTC(sig.tp2_hit_at).toLocaleString()}</span></div>
                                 )}
                                 {sig.closed_at && !sig.tp1_hit_at && !sig.tp2_hit_at && (
-                                  <div><span style={{opacity: 0.6}}>Closed:</span> <span style={{color: isWon ? 'var(--color-success)' : isLost ? 'var(--color-danger)' : 'var(--text-muted)'}}>{new Date(sig.closed_at).toLocaleString()}</span></div>
+                                  <div><span style={{opacity: 0.6}}>Closed:</span> <span style={{color: isWon ? 'var(--color-success)' : isLost ? 'var(--color-danger)' : 'var(--text-muted)'}}>{parseDateUTC(sig.closed_at).toLocaleString()}</span></div>
                                 )}
                                 {sig.closed_at && isLost && (
-                                  <div><span style={{opacity: 0.6}}>Stopped:</span> <span style={{color: 'var(--color-danger)'}}>{new Date(sig.closed_at).toLocaleString()}</span></div>
+                                  <div><span style={{opacity: 0.6}}>Stopped:</span> <span style={{color: 'var(--color-danger)'}}>{parseDateUTC(sig.closed_at).toLocaleString()}</span></div>
                                 )}
                               </div>
                             </div>

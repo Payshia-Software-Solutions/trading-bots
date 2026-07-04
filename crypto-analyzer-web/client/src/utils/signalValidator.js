@@ -1,9 +1,18 @@
+export const parseDateUTC = (dateStr) => {
+  if (!dateStr) return null;
+  if (dateStr.includes('Z') || dateStr.includes('+') || dateStr.includes('T')) {
+    return new Date(dateStr);
+  }
+  // Convert "YYYY-MM-DD HH:MM:SS" from MySQL (UTC) into valid ISO-8601 UTC string
+  return new Date(dateStr.replace(' ', 'T') + 'Z');
+};
+
 export const verifySignalWithKlines = async (sig, updateSignalStatus) => {
   if (sig.status === 'WON' || sig.status === 'LOST') return;
 
   try {
     const symbol = sig.pair;
-    const startTime = new Date(sig.created_at).getTime();
+    const startTime = parseDateUTC(sig.created_at).getTime();
     
     // Fetch 15m klines to capture spikes safely for up to 10 days
     const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=15m&startTime=${startTime}&limit=1000`);
