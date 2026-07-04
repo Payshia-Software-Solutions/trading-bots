@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Activity, X, ChevronLeft, Calendar, ArrowRight, ShieldCheck, AlertTriangle, TrendingUp, HelpCircle, Loader, Trash2 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
-import { verifySignalWithKlines } from "../../utils/signalValidator";
+import { verifySignalWithKlines, parseDateUTC } from "../../utils/signalValidator";
 import "./history.css";
 
 function HistoryContent() {
@@ -207,23 +207,23 @@ function HistoryContent() {
     const now = new Date();
     if (timeFilter === "24h") {
       const past24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      filtered = filtered.filter(s => new Date(s.created_at) >= past24h);
+      filtered = filtered.filter(s => parseDateUTC(s.created_at) >= past24h);
     } else if (timeFilter === "7d") {
       const past7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      filtered = filtered.filter(s => new Date(s.created_at) >= past7d);
+      filtered = filtered.filter(s => parseDateUTC(s.created_at) >= past7d);
     } else if (timeFilter === "30d") {
       const past30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      filtered = filtered.filter(s => new Date(s.created_at) >= past30d);
+      filtered = filtered.filter(s => parseDateUTC(s.created_at) >= past30d);
     } else if (timeFilter === "custom") {
       if (customStart) {
         const start = new Date(customStart);
-        filtered = filtered.filter(s => new Date(s.created_at) >= start);
+        filtered = filtered.filter(s => parseDateUTC(s.created_at) >= start);
       }
       if (customEnd) {
         // Set end time to end of that day
         const end = new Date(customEnd);
         end.setHours(23, 59, 59, 999);
-        filtered = filtered.filter(s => new Date(s.created_at) <= end);
+        filtered = filtered.filter(s => parseDateUTC(s.created_at) <= end);
       }
     }
 
@@ -518,18 +518,18 @@ function HistoryContent() {
                           </span>
                         </div>
                         <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right' }}>
-                          <div><span style={{ opacity: 0.6 }}>Open:</span> {new Date(sig.created_at).toLocaleString()}</div>
+                          <div><span style={{ opacity: 0.6 }}>Open:</span> {parseDateUTC(sig.created_at).toLocaleString()}</div>
                           {sig.tp1_hit_at && (
-                            <div><span style={{ opacity: 0.6 }}>TP1 Hit:</span> <span style={{ color: 'var(--color-success)' }}>{new Date(sig.tp1_hit_at).toLocaleString()}</span></div>
+                            <div><span style={{ opacity: 0.6 }}>TP1 Hit:</span> <span style={{ color: 'var(--color-success)' }}>{parseDateUTC(sig.tp1_hit_at).toLocaleString()}</span></div>
                           )}
                           {sig.tp2_hit_at && (
-                            <div><span style={{ opacity: 0.6 }}>TP2 Hit:</span> <span style={{ color: 'var(--color-success)' }}>{new Date(sig.tp2_hit_at).toLocaleString()}</span></div>
+                            <div><span style={{ opacity: 0.6 }}>TP2 Hit:</span> <span style={{ color: 'var(--color-success)' }}>{parseDateUTC(sig.tp2_hit_at).toLocaleString()}</span></div>
                           )}
                           {sig.closed_at && !sig.tp1_hit_at && !sig.tp2_hit_at && (
-                            <div><span style={{ opacity: 0.6 }}>Closed:</span> <span style={{ color: isWon ? 'var(--color-success)' : isLost ? 'var(--color-danger)' : 'var(--text-muted)' }}>{new Date(sig.closed_at).toLocaleString()}</span></div>
+                            <div><span style={{ opacity: 0.6 }}>Closed:</span> <span style={{ color: isWon ? 'var(--color-success)' : isLost ? 'var(--color-danger)' : 'var(--text-muted)' }}>{parseDateUTC(sig.closed_at).toLocaleString()}</span></div>
                           )}
                           {sig.closed_at && isLost && (
-                            <div><span style={{ opacity: 0.6 }}>Stopped:</span> <span style={{ color: 'var(--color-danger)' }}>{new Date(sig.closed_at).toLocaleString()}</span></div>
+                            <div><span style={{ opacity: 0.6 }}>Stopped:</span> <span style={{ color: 'var(--color-danger)' }}>{parseDateUTC(sig.closed_at).toLocaleString()}</span></div>
                           )}
                         </div>
                       </div>

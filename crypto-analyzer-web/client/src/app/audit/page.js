@@ -3,6 +3,7 @@
 import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { ChevronLeft, Activity, RefreshCw, CheckCircle, Clock, Target, TrendingUp, TrendingDown } from "lucide-react";
+import { parseDateUTC } from "../../utils/signalValidator";
 
 function AuditContent() {
   const [snapshots, setSnapshots] = useState([]);
@@ -221,7 +222,7 @@ function AuditContent() {
                           {auditingId === snap.id ? 'Auditing...' : 'Run Audit'}
                         </button>
                       )}
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{new Date(snap.created_at).toLocaleString()}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{parseDateUTC(snap.created_at).toLocaleString()}</span>
                     </div>
                   </div>
 
