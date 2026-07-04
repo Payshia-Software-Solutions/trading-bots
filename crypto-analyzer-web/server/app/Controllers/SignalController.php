@@ -31,6 +31,26 @@ class SignalController {
         
         if (!empty($data['pair']) && !empty($data['mode'])) {
             try {
+                // Prevent duplicate signals (same pair, mode, risk_mode) within 15 minutes
+                $risk_mode = isset($data['risk_mode']) ? $data['risk_mode'] : 'safe';
+                $checkQuery = "SELECT id FROM signals 
+                               WHERE pair = :pair 
+                                 AND mode = :mode 
+                                 AND risk_mode = :risk_mode 
+                                 AND created_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE) 
+                               LIMIT 1";
+                $checkStmt = $this->db->prepare($checkQuery);
+                $checkStmt->bindParam(":pair", $data['pair']);
+                $checkStmt->bindParam(":mode", $data['mode']);
+                $checkStmt->bindParam(":risk_mode", $risk_mode);
+                $checkStmt->execute();
+                
+                if ($checkStmt->fetch()) {
+                    http_response_code(409); // Conflict
+                    echo json_encode(["message" => "Duplicate signal detected within 15 minutes cooldown."]);
+                    return;
+                }
+
                 $query = "INSERT INTO signals (pair, mode, risk_mode, current_price, buy_target, tp1, sell_target, stop_loss, rr_ratio, score, status, confidence_level, risk_level) 
                           VALUES (:pair, :mode, :risk_mode, :current_price, :buy_target, :tp1, :sell_target, :stop_loss, :rr_ratio, :score, :status, :confidence_level, :risk_level)";
                 
